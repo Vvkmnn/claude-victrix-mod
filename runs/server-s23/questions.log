@@ -1,0 +1,4 @@
+2026-11-02T04:07:50.841638+00:00Z	What do the top leaderboard entries score, and what limits them (connections, CPU)? We want to know the realistic ceiling for users.
+2026-11-02T04:07:50.863770+00:00Z	Is reading SQLite's B-tree pages directly (bypassing the SQL engine) allowed by the organiser, if schema/data stay unchanged and writes still go through SQLite WAL?
+2026-11-02T04:07:50.888384+00:00Z	Is any other process writing to the database during the benchmark, or can timestamps go backwards? Only our server writes?
+2026-11-02T04:07:50.912438+00:00Z	Is it OK to use multiple processes and go direct on port 80 without nginx, written in C with libsqlite3 pinned amalgamation?

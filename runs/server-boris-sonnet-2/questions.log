@@ -1,0 +1,3 @@
+2026-11-02T04:08:36.427384+00:00Z	Is it OK to go direct on port 80 without Nginx, and is anything else besides our server ever writing to the database during the benchmark?
+2026-11-02T04:08:36.456792+00:00Z	Roughly what do the top leaderboard entries score, and what language are they in?
+2026-11-02T04:08:36.488897+00:00Z	Which language should I use, and can the build download or install extra dependencies?

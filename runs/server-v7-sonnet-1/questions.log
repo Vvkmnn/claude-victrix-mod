@@ -1,0 +1,4 @@
+2026-11-02T04:07:38.871960+00:00Z	Is reading SQLite's B-tree pages directly (bypassing the SQL engine) allowed for reads, as long as writes go through SQLite?
+2026-11-02T04:07:38.895337+00:00Z	Should I go direct on port 80 without nginx, and is the connection ceiling a real limit at the top scores?
+2026-11-02T04:07:38.923265+00:00Z	Does anything else write to the database during the benchmark, and can the clock go backwards?
+2026-11-02T04:38:11.149068+00:00Z	Is it fine for install.sh to apt-install libsqlite3-dev (Ubuntu 24.04's SQLite 3.45.1) rather than a vendored pinned copy?

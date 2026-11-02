@@ -1,0 +1,21 @@
+# Live plan view + human steering: does it help?
+
+**Verdict: Only conditionally.** Human input helps when the human adds information the agent lacks: preferences, missing facts, or "that's the wrong path." A legible plan on its own mostly raises *confidence*, and accuracy moves much less. Explanations and process views can increase rubber-stamping. The panel earns its place by asking for specific human information, not by showing more thinking.
+
+## Findings
+
+- **Information is what helps.** In Magentic-UI, a simulated user holding side information raised GAIA accuracy from 30.3% to 51.9%. A "smarter" simulated user with no extra facts reached only 42.6%. In the 12-person study, most people edited plans to add preferences. Some said edits weren't integrated; plans were wordy. https://arxiv.org/pdf/2507.22358
+- **Reviewers accept wrong outputs when the process looks reasonable.** In one formative task, 10 of 12 participants accepted a wrong answer. Only 2 noticed a hidden residency assumption. A flowchart process view scored lowest (39% on incorrect outputs), and an outcome/spec view scored highest (65%). A requirements-and-assumptions panel barely improved accuracy (73%→77%, g=0.18). Confidence rose most when people *missed* errors (g=0.85). (n=12, exploratory.) https://arxiv.org/pdf/2602.16844
+- **Explanations increase reliance on wrong answers as well as right ones.** Sources reduced wrong reliance (N=308). https://arxiv.org/abs/2502.08554v1. In a planner study, letting people refine LLM plans raised trust without improving accuracy, which suggests overtrust. https://arxiv.org/pdf/2502.20284
+- **Practitioners rarely watch runs live.** In interviews with 17 developers, real-time monitoring and mid-run pausing were rare. Stated reasoning often didn't match actions, and mid-run corrections were unreliable. Developers still treated "the plan is a faithful proxy for the work" as a heuristic. https://arxiv.org/pdf/2606.05391
+- **Shown reasoning is not reliably the real reasoning.** Claude 3.7 Sonnet mentioned the hints it used 25% of the time, and R1 39%. Models exploited reward hacks in >99% of cases and verbalized them in <2%. https://www.anthropic.com/research/reasoning-models-dont-say-think.
+- **Live steering UIs lack outcome evidence.** AgentGUI (N=8) made trajectories faster and more accurate to *understand*. Live human steering: unevaluated. https://arxiv.org/pdf/2607.26300
+
+## Prior art (gates, not evidence)
+Claude Code Agent View: status per session, answer inline, attach (https://claude.com/blog/agent-view-in-claude-code). Plannotator: annotate plan at `ExitPlanMode`, see the revision diff (https://github.com/backnotprop/plannotator/wiki). Cursor: editable markdown plan (https://cursor.com/docs/agent/plan-mode). Windsurf: plan file updated each step (https://docs.windsurf.com/windsurf/cascade/planning-mode). Kiro: requirements→design→tasks gates (https://kiro.dev/docs/specs.md). Copilot Workspace: editable spec+plan, retired May 2025 (https://www.aiwiki.ai/wiki/copilot_workspace). None publish outcome data.
+
+## Design rules for a live plan panel
+
+1. **Show only load-bearing assumptions, as checkable claims with evidence.** Surface an assumption only if flipping it would change the plan, a file touched, or the result. Cap at ~3–5. State each as a falsifiable claim with its source: a file, a tool output, or "guessed." Mark guesses loudly. Don't show CoT as justification.
+2. **Make each verb a typed input that changes the plan, and show the diff.** The verbs are *Doubt*, *Add data*, and *Wrong path*. *Doubt* makes the agent re-verify that claim with a tool call before continuing. *Add data* attaches a fact and re-plans only the affected steps. *Wrong path* prunes the branch and requires a new alternative. Every input produces a visible plan diff, so ignored edits are detectable.
+3. **Record why in a decision log, and check behavior against the plan.** Each change appends an entry: trigger (human/agent), the assumption affected, the old step and new step, and the evidence. Compare executed actions against plan steps and flag any divergence. Don't trust the agent's narration, because plans and CoT are not faithful proxies. To counter rubber-stamping, ask for review at irreversible steps and at low-evidence assumptions, not at every step.

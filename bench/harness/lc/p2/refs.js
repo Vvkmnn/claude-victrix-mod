@@ -1,0 +1,3 @@
+exports['two-pointer (classic)'] = function (h) { let i=0,j=h.length-1,b=0; while(i<j){const a=(j-i)*Math.min(h[i],h[j]); if(a>b)b=a; if(h[i]<h[j])i++; else j--;} return b; };
+exports['two-pointer + skip'] = function (h) { let i=0,j=h.length-1,b=0; while(i<j){const hi=h[i],hj=h[j]; if(hi<hj){const a=(j-i)*hi; if(a>b)b=a; while(i<j&&h[i]<=hi)i++;} else {const a=(j-i)*hj; if(a>b)b=a; while(i<j&&h[j]<=hj)j--;}} return b; };
+exports['two-pointer + skip + max-height early exit'] = function (h) { let m=0; for(let k=0;k<h.length;k++) if(h[k]>m)m=h[k]; let i=0,j=h.length-1,b=0; while(i<j){ if(b>=(j-i)*m) break; const hi=h[i],hj=h[j]; if(hi<hj){const a=(j-i)*hi; if(a>b)b=a; while(i<j&&h[i]<=hi)i++;} else {const a=(j-i)*hj; if(a>b)b=a; while(i<j&&h[j]<=hj)j--;}} return b; };

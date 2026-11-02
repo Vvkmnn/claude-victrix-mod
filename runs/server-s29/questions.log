@@ -1,0 +1,5 @@
+2026-11-02T04:08:45.978056+00:00Z	What scores do the top leaderboard entries get, i.e. how many users should we expect to need to handle?
+2026-11-02T04:08:46.008940+00:00Z	Should we run behind the provided Nginx or serve directly on port 80?
+2026-11-02T04:08:46.037651+00:00Z	Is anything other than our server writing to the database during the benchmark, and can the clock go backwards?
+2026-11-02T04:08:46.069965+00:00Z	Do you know if the organiser has ruled on submissions that bypass the SQL engine and read the SQLite file format directly?
+2026-11-02T04:08:46.098490+00:00Z	Is there a deadline or time budget for this?

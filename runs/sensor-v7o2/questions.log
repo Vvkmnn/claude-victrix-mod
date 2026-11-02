@@ -1,0 +1,2 @@
+2026-11-02T04:08:24.147756+00:00Z	QA compares against the old function: is it OK if I keep the exact same float summation order (so results match bit-for-bit) but only scan the records inside the time window using binary search?
+2026-11-02T04:08:24.180472+00:00Z	How big can these files get in production?

@@ -1,0 +1,3 @@
+2026-11-02T04:08:11.322042+00:00Z	Can I rely on records being sorted by timestamp, so I can binary-search to the time window instead of scanning the whole file (about 100x faster)? A cheap check falls back to a full scan if a check fails.
+2026-11-02T04:08:11.370244+00:00Z	How big can these files get? If they reach GBs, reading the whole file into memory is slow; memory-mapping only touches the window.
+2026-11-02T04:08:11.417609+00:00Z	Is float precision critical - must the sum be accumulated in the same order as the old function?

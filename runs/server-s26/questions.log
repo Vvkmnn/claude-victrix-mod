@@ -1,0 +1,3 @@
+2026-11-02T04:19:41.300003+00:00Z	What GitHub username should the submission folder use (submissions/<language>-<framework>-<github-username>/)? I currently have a placeholder.
+2026-11-02T04:19:41.410970+00:00Z	You mentioned the organiser said reading SQLite's B-tree directly is allowed. Can you paste his exact message or link to the PR comment? I'd rather not build on a second-hand summary, since rules 2 and 5 say data must be read from SQLite while serving.
+2026-11-02T04:19:41.536360+00:00Z	Does the benchmark box's kernel allow io_uring, and how many connections did you see the top entries hold open?

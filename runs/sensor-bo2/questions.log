@@ -1,0 +1,2 @@
+2026-11-02T04:08:35.914393+00:00Z	Can I rely on records being sorted by ts_ms so I can binary-search the window?
+2026-11-02T04:08:35.940988+00:00Z	Values may include NaN/inf or huge magnitudes; must the float sum match the old function's sequential summation exactly?

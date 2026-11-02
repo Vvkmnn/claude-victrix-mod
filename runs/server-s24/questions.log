@@ -1,0 +1,5 @@
+2026-11-02T04:09:51.922099+00:00Z	Can we skip Nginx and serve directly on port 80? It saves about 15-20% CPU, but our server then holds ~15k connections itself. If it breaks we can fall back to Nginx with one env var.
+2026-11-02T04:09:51.976314+00:00Z	Do you know what the top leaderboard scores are (how many users), and whether the load generator or connection count is a ceiling?
+2026-11-02T04:09:52.028182+00:00Z	Is anything other than our server writing to the database during the benchmark, and can the clock go backwards? (This decides whether the newest post is always the highest id.)
+2026-11-02T04:09:52.078460+00:00Z	Is it allowed to read SQLite's B-tree file format directly instead of going through the SQL engine for reads? Schema unchanged. Could be a big speedup; I'd keep a fallback to normal SQL.
+2026-11-02T04:09:52.128193+00:00Z	Is io_uring OK on the benchmark box (Ubuntu 24.04)?

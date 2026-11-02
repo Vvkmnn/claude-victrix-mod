@@ -1,0 +1,4 @@
+2026-11-02T04:09:28.308631+00:00Z	What do the top leaderboard entries score (how many users)?
+2026-11-02T04:09:28.380831+00:00Z	Is it OK for a direct (no Nginx) server to close idle keep-alive sockets after a few seconds, so we can serve more VUs than the 65535 fd limit?
+2026-11-02T04:09:28.474944+00:00Z	Has the organiser said anything about reading the SQLite file format / B-tree directly instead of going through the SQL engine?
+2026-11-02T04:09:28.535192+00:00Z	Is any other process writing to the database, and can the system clock go backwards on the box?

@@ -1,0 +1,94 @@
+# Hidden proofs make Claude's plans faster
+
+**Verdict: Yes, with a narrower meaning of "stumble" than the question hopes. A single invisible mod can regularly give ordinary users surprisingly efficient, proved-equivalent rewrites of their own plans and code. It will almost never hand them algorithms that experts would call new. Confidence 7/10.** Every precedent points the same way. In hargup's Lean-derived feed server, which is #1 on the benchmark leaderboard, the speedup came from a known database trick (dense ids plus monotone timestamps mean "ORDER BY created_at DESC LIMIT 20" is just the last 20 rows). What was new was that the trick was applied aggressively, proved against the model, and guarded at runtime. Superoptimizers, AlphaEvolve and LLM-plus-verifier compiler work show the same thing at scale: most "discoveries" are known-but-unapplied tricks, and genuine records are rare, small, and quickly matched by cheap classical search. For an average user that is fine, because a known trick they did not know is a discovery for them. The engine should mine invariants, propose rewrites, falsify cheaply, prove in Lean, benchmark, and ship behind a guard with a fallback. The user sees only better code and a two-line plain-English "why it's faster and why it's safe." It is not 10/10 for three reasons: no published system has yet automated the creative step of picking the right invariant end to end; Lean software-proof rates on 2025 benchmarks were low; and the best wins depend on knowing every writer to the data, which typical codebases do not guarantee.
+
+## The evidence
+
+| Claim | Evidence | Source |
+|---|---|---|
+| A proved invariant-driven plan can win in production-grade competition | hargup's submission ranked **#1: 280,000 users held for 5 min, 26,683 req/s, 31 µs CPU/request, 836 MB peak**, tied at 280k with mojo and objc entries (scored 2026-10-28) | [Leaderboard](https://benchmarks.arjaythedev.com); local rebuild |
+| The proved part is real and small | **~950 lines of Lean spec**, 512 lines of generated C, ~1,600 lines of hand-written runtime (unproved). Lean 4.35.0 `lake build` takes ~4 s, and the regenerated C is byte-identical. `#print axioms` on `feedPlan_eq`, `postPlan_eq`, `inv_addPost`, `checkInv_sound` shows only `propext`, `Classical.choice`, `Quot.sound` | `/home/claude/src/t12/submissions/lean-derive-hargup/README.md`, `spec/Feed/*.lean` (rebuilt locally) |
+| Gain from the proved plan alone | Feed query went from **16.7 µs (SQL) to 5.4 µs (native B-tree tail scan), about 3.1×**. Much of the leaderboard result comes from the unproved io_uring runtime, not from the proof | same README |
+| The proof does not reach the binary | Plans are proved equal to the model. The emitted C is *tested* (byte-identical on 20,000 random posts), not proved. A runtime guard switches to SQL if the invariant check fails or another connection writes | same README |
+| AI discovery is mostly rediscovery | AlphaEvolve matched the state of the art on ~75% of 50+ math problems and beat it on 13 (~20%). Kissing number in 11D went 592 → 593 | [Davis notes](https://cs.nyu.edu/~davise/papers/AlphaEvolveNotes.pdf) |
+| AI records fall fast to cheap search | AlphaTensor's 5×5 record lasted "a good week". A flip-graph walk found rank 95 "within seconds" | [Kauers & Moosbauer](https://arxiv.org/pdf/2212.01175); [The Decoder](https://the-decoder.com/deepmind-alphatensor-record-for-matrix-multiplication-held-for-a-good-week/) |
+| Notebook-scale A* matches or beats TPU-scale RL | sort5 took 11 min on a Ryzen notebook vs ~1,050 min for AlphaDev, and ran faster (14.84 vs 16.20 ms) | [Ullrich & Hack, CGO'25](https://compilers.cs.uni-saarland.de/papers/ullrich_sorting_kernels.pdf) |
+| Superoptimizer output is mostly known tricks | Souper found ~7,900 optimizations. On MSVC it found 935 cheaper forms out of 15,846, and "many were already supported" | [Souper](https://arxiv.org/pdf/1711.04422); [Regehr](https://blog.regehr.org/archives/1146) |
+| LLM proposer plus formal checker works | LPO found 62 new missed LLVM peepholes, 28 confirmed and 13 fixed. LLM SQL rewrites exposed rules missing from SQL Server's optimizer | [LPO](https://arxiv.org/abs/2508.16125v2); [CIDR 2026](https://mail.vldb.org/cidrdb/2026/leveraging-query-optimizers-to-verify-the-soundness-of-llm-based-query-rewrites-for-real-world-workloads.html) |
+| LLMs should choose checkpoints, not write proof steps | LGuess solved **255/320**, plain equality saturation 204, LLM-only rewrite chains **3** | [LGuess](https://arxiv.org/html/2511.00403v1) |
+| Invariant proposal works; repair does not | GPT-4o loop invariants: 49–78% correct. Repair from verifier feedback: **6–16%** | [arXiv 2511.06552](https://arxiv.org/html/2511.06552v1) |
+| Writing the spec is the bottleneck | Fully faithful specs on the first try: **Opus 4.6 51.1%**, Gemini 3.1 Pro 77.8%. Models solved 81.8% of tasks they wrote wrong specs for | [Verus-SpecGym](https://arxiv.org/abs/2605.26457) |
+| Repair helps but some drift remains | Opus 4.6 equivalence went from 44.7% to **85.3%** with round-trip repair, and **9.4%** still drifted semantically | [Roundtrip](https://arxiv.org/abs/2604.25031) |
+| Lean software proofs were hard (2025 models) | VERINA proofs 4.9% (20.1% with 64 feedback steps). Lean vericoding 26.8%. CLEVER end-to-end 0.6% | [VERINA](https://arxiv.org/abs/2505.23135); [Vericoding](https://arxiv.org/abs/2509.22908); [CLEVER](https://arxiv.org/abs/2505.13938) |
+| No end-to-end "LLM + Lean finds a faster algorithm" system exists yet | Proof gets added after discovery. ALGORITHMIST's new DP algorithm was "not machine checked" | [Tao et al.](https://arxiv.org/abs/2511.02864); [ALGORITHMIST](https://arxiv.org/pdf/2603.22363) |
+
+## What "stumbling onto algorithms" really means: rediscovery, licensed by proof
+
+There are three tiers of outcome, and their realistic frequencies differ by orders of magnitude.
+
+| Tier | Example | Realistic frequency for an average user | Does Lean add value? |
+|---|---|---|---|
+| **A. Known trick, newly applied to *their* data** | hargup's tail scan; replacing a sort with a heap when only top-k is needed; prefix sums; monotone-queue windows; dedup by key when ids are unique | Common: most plans with a collection-heavy hot path have one | **Yes, the most.** The trick depends on an invariant, and proof plus guard makes it safe to apply |
+| **B. Known in the literature, unknown to the user and Claude's default output** | Semantic query optimization from integrity constraints (a 1980s idea); Bird-Meertens fusion such as maximum segment sum O(n³) → O(n) | Occasional | Yes: an equivalence proof catches subtle off-by-one and edge-case drift |
+| **C. New to experts** | AlphaEvolve's 4×4 complex rank-48 scheme; FunSearch cap set n=8 (512 vs 496) | Essentially never from everyday plans. Those wins needed expert-built evaluators and fleet compute | Marginal: those discoveries used cheap numeric evaluators, and Lean came after |
+
+On the numbers, even purpose-built discovery systems aimed at open problems beat the state of the art about **20%** of the time, by small margins ([Davis](https://cs.nyu.edu/~davise/papers/AlphaEvolveNotes.pdf)). A tool aimed at CRUD apps and scripts should expect Tier C at roughly zero. The value is Tier A at scale. Fiat and KIDS show the same split of labour: humans supply "the equivalent of SQL indexes", and tactics mechanize the refinement ([Fiat](https://www.cs.purdue.edu/homes/bendy/Fiat/index.html)). Claude can now play the human role for Tier A. The honest pitch to users is "the code your best colleague would write, with a proof that it gives the same answer", not "new algorithms".
+
+## Architecture for one invisible engine
+
+**Key design move: the spec is the naive version, not the English.** For code, the reference is the user's existing code, or the straightforward version Claude would write. For plans, it is the naive plan. Translating executable naive code into a Lean model can be checked by *running both on the same inputs*. That largely avoids the 50–60% first-shot faithfulness problem with English-to-Lean ([Verus-SpecGym](https://arxiv.org/abs/2605.26457)), because a mistranslated model fails differential tests rather than silently proving the wrong thing.
+
+### Pipeline
+
+| Stage | What runs | Budget | Precedent |
+|---|---|---|---|
+| 1. Intercept | A `tool.call` hook on `ExitPlanMode`, plus `turn.complete` after edits to hot files. The hook only snapshots the plan or diff and returns `next(e)` at once, so Claude is never blocked (Plannotator's mod mode) | <1 s of hook CPU, well under the **10 s hook limit** | [Mods events](https://code.claude.com/docs/en/plugins/mods/events.md); [Plannotator](https://docs.plannotator.ai/open-source/agents/claude-code.md) |
+| 2. Triage | `$.model.fork` with a cheap model asks one question: is there a collection- or query-heavy hot path, and what would it cost at 10×/100× scale? Stop here for about 80% of plans | 1 small call | [Mods API](https://code.claude.com/docs/en/plugins/mods/api.md) |
+| 3. Model | Claude writes a small Lean model of the naive path (no Mathlib, so checks stay fast). A differential test compares it with the real code on recorded or generated inputs. Any mismatch stops the pipeline | seconds | hargup `Model.lean` doubles as the test oracle |
+| 4. Invariant mining | Sample many candidates, without iterative repair: Daikon-style mining over the dev DB and test traces ("ids contiguous", "ts non-decreasing in id", "unique by key"), LLM proposals, and declared constraints. Then **enumerate every writer** in the repo and check each candidate is inductive across them | background | [arXiv 2511.06552](https://arxiv.org/html/2511.06552v1) (repair 6–16%, so sample, don't repair) |
+| 5. Candidate rewrites | The LLM proposes the *invariant and plan shape* (checkpoints). The lean-egg conditional rewrites fill in steps, with invariants as guards | background | [lean-egg, POPL'26](https://popl26.sigplan.org/details/POPL-2026-popl-research-papers/27/Towards-Pen-and-Paper-Style-Equational-Reasoning-in-Interactive-Theorem-Provers-by-Eq); [LGuess](https://arxiv.org/html/2511.00403v1) |
+| 6. Cheap falsification | Plausible property tests in Lean (candidate = naive), small-domain exhaustive checks, and differential runs on real data. Kills most wrong candidates before any proof attempt | sub-second each | sort-kernel exhaustive checking ([Ullrich & Hack](https://compilers.cs.uni-saarland.de/papers/ullrich_sorting_kernels.pdf)) |
+| 7. Proof ladder | `decide`/`simp` → `grind` → `egg` → LeanHammer (~1–7 s, ~33% of Mathlib goals) → Claude agent via lean-lsp-mcp. Every proof must pass a mechanical gate: no `sorry`, `#print axioms` shows standard axioms only. Never trust a prover's summary | warm REPL ≈ 0.05–2 s per check | [LeanHammer](https://arxiv.org/html/2506.07477v1); [Kimina](https://arxiv.org/html/2504.21230v3); [Aristotle overclaim](https://arxiv.org/abs/2605.20120) |
+| 8. Benchmark | Real target language, several input scales (to separate asymptotic from constant-factor gains), against the naive version. Require ≥1.5× at the user's stated scale | background | AlphaDev's latency-proxy lesson ([Wikipedia](https://en.wikipedia.org/wiki/AlphaDev)) |
+| 9. Apply | Emit the code with an **invariant guard and a fallback to the naive path** (hargup pattern), a generated differential test, and the proof files hidden under `.claude/proofs/` for CI re-checking. `$.prompt.submit` hands the result to Claude to integrate once the session is idle | 1 turn | hargup README; [Mods API](https://code.claude.com/docs/en/plugins/mods/api.md) |
+
+**Mod constraints that shape this.** Hooks get 10 s of their own CPU time, `$.process.run` times out at 30 s, and long work must run under `$.process.spawn` or, better, a detached daemon polled by `$.clock.every`, because timers die on module reload. Mods are **not sandboxed**, and `$.model.complete` **spends the user's quota**. Panes do not draw in `claude -p`, the SDK, or cloud sessions. That last limit suits an invisible design: keep the engine as a CLI plus MCP server, and treat the mod as a thin trigger ([Mods overview](https://code.claude.com/docs/en/plugins/mods/overview.md), [API](https://code.claude.com/docs/en/plugins/mods/api.md)).
+
+### What the user sees, and how claims are labelled honestly
+
+The user never sees Lean. They see the better code plus one note whose wording is generated from a **proof-coverage ledger** and is never free text:
+
+| Coverage actually achieved | Wording allowed in the note |
+|---|---|
+| Proof covers the emitted code (rare: only when the hot function is itself compiled Lean) | "Proved to return exactly what the original did." |
+| Proof covers the model; code is differential-tested; guard is in place (the hargup case, and the default) | "Faster because post ids and times only ever increase, so it reads the newest 20 rows directly instead of sorting (~3× at 100k posts). It checks this stays true on every insert and falls back to the original query if not." |
+| Falsification passed, no proof | Never shipped silently. At most offered as a suggestion: "Likely faster; not verified." |
+
+Two rules prevent false confidence. The word "proved" never appears unless the ledger shows a kernel-checked theorem *and* a passing model-vs-code differential test. The guard is mandatory whenever the speedup depends on an invariant the database or type system does not enforce.
+
+## Risks and failure modes
+
+| Risk | Measured rate or evidence | Mitigation in this design |
+|---|---|---|
+| Proof of the wrong statement (misformalization) | 51–78% faithful specs first try; 85% after round-trip repair, with 9–14% residual drift ([Verus-SpecGym](https://arxiv.org/abs/2605.26457), [Roundtrip](https://arxiv.org/abs/2604.25031)) | The spec is executable naive code, and a differential test runs model against code. English is used only for the user note |
+| Vacuous or weak specs | ~9% of "successful" vericoding specs were too weak; one Lean case returned `[]` ([Vericoding](https://arxiv.org/abs/2509.22908)) | The theorem *shape* is fixed by the engine (`Inv db → plan db = naive db`), so the LLM cannot weaken it. Check that the invariant is satisfiable on real data |
+| Compiles but isn't faithful | Lean feedback raised compile rates, and nearly half the gain was unfaithful output ([Beyond Compilation](https://arxiv.org/abs/2606.31002)) | A compile is never counted as success. Use an independent second-model check, not self-judging (self-judging missed ~26%) |
+| `sorry` or overclaiming | An 8-hour Aristotle run ended in `sorry`, and its summary overstated the result ([arXiv 2605.20120](https://arxiv.org/abs/2605.20120)) | Mechanical `#print axioms` gate |
+| Gamed evaluator | AlphaEvolve exploited "leaky verifiers" and floating-point slack ([Tao et al.](https://arxiv.org/abs/2511.02864)) | Correctness is gated by proof, not score. Benchmarks use exact output comparison |
+| Gap between proof and emitted code | hargup's C is tested, not proved. Souper shipped a miscompilation from a Z3 bug ([Souper](https://arxiv.org/pdf/1711.04422)) | Guard plus fallback plus differential test committed to CI. Honest wording tier |
+| Invariant broken from outside the repo | hargup needed a data-version check for other writers | Writer enumeration plus a runtime guard. Default to fallback when external writers are possible |
+| Cost and latency | Heavy provers need ~10 H20-GPU-days per hard problem ([Seed-Prover 1.5](https://arxiv.org/abs/2512.17260)) | Escalation ladder, triage gate, a per-session token budget read from `$.session.usage()`, and no heavyweight provers by default |
+
+## Strongest objection and reply
+
+**Objection:** This is a superoptimizer or semantic query optimizer with extra steps. Claude could suggest "read the last 20 rows" without Lean. The proof costs tokens and latency and adds nothing the user can see.
+
+**Reply:** Lean's job is not discovery. It is *permission*. A rewrite that depends on an invariant is exactly the kind a careful engineer, or a careful Claude, should refuse to make unprompted, because it silently breaks when the invariant breaks. The proof establishes three things: the rewrite is equal to the naive version under the invariant, the invariant survives every writer, and the startup check is sound. That turns a risky clever trick into a safe default. hargup's theorems (`inv_addPost`, `checkInv_sound`, `feedPlan_eq`) are exactly that set. Proof is also the only evaluator that cannot be gamed, which matters once a search loop is optimizing against it. **Concession:** for rewrites that need no invariant, such as N+1 query elimination or adding an index, Lean adds little. The engine should skip proof there and use differential tests only.
+
+## One non-obvious way this could be wrong
+
+The best wins depend on a **closed-world assumption** that average users' systems rarely satisfy. hargup's invariant holds because one process is provably the only writer. Real apps have migrations, admin scripts, ORMs that backfill timestamps, replicas, and other services. If invariants mined from the repo are routinely broken outside it, the guard fires, the fallback runs, and the user gets the naive speed plus the cost of the guard: correct, but pointless. In that case Tier A shrinks to invariants the database or type system already enforces (uniqueness, foreign keys, sortedness held by construction), and those are exactly the ones existing optimizers already exploit ([QED](https://vldb.org/pvldb/vol17/p3602-wang.pdf)). A related risk: average users' bottlenecks may be mostly I/O and N+1 queries rather than algorithmic, leaving the math engine with little to do. Both are measurable before building much.
+
+## Concrete next step and success metric
+
+**Re-derive hargup blind, then go wider.** Give a v0 engine (a CLI daemon plus a thin mod hook on `ExitPlanMode`) only the naive feed server, meaning `Model.lean`'s semantics and the reference SQL, with `Invariant.lean` and `Plan.lean` removed. **Pass:** with no human hints, it proposes `dense ∧ mono`, proves `feedPlan_eq` and `inv_addPost` with only standard axioms, and reproduces a speedup of at least 2.5× on the feed query (vs 3.1× hand-derived) within a $20 token budget and 2 hours. Then run it over **30 small open-source apps or scripts** with realistic seed data. **Success metric:** at least 5 shipped rewrites with ≥2× speedup at 10× data scale, **zero** guarded rewrites that diverge from the naive path on 10⁵ differential inputs, a guard fallback rate under 5% on realistic write workloads (this tests the closed-world risk directly), and median cost under $3 per accepted rewrite. If the blind re-derivation fails at invariant selection, the creative step is still human, and the product should be repositioned as "proof-gated application of tricks Claude already suggests".

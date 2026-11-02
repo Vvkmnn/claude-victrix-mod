@@ -1,0 +1,8 @@
+{
+  "name": "victrix",
+  "version": "0.1.0",
+  "description": "Follow and steer Claude's plan live: where it is, what it just did, and the assumptions that would change the plan.",
+  "license": "Apache-2.0",
+  "author": { "name": "vvkmnn" },
+  "types": "./types/index.d.ts"
+}

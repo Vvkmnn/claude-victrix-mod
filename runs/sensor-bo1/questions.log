@@ -1,0 +1,3 @@
+2026-11-02T04:08:50.866839+00:00Z	Are records guaranteed sorted by ts_ms in every file, even old or other customers' files?
+2026-11-02T04:08:50.934502+00:00Z	How big can files get?
+2026-11-02T04:08:50.972262+00:00Z	Can a file have a partial trailing record (size not a multiple of 16), e.g. being written while we read it?

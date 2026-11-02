@@ -1,0 +1,4 @@
+2026-11-02T04:08:31.808779+00:00Z	Rule 5 bans caching. If 30 people ask for the feed in the same millisecond, may the server run the feed query once and send that same fresh result to all 30 (nothing kept afterwards)? Could be up to ~2x more users; risk is the organiser calling it a response cache. I'd ship it off by default behind a switch.
+2026-11-02T04:08:31.830440+00:00Z	Do you know what scores the top leaderboard entries get, and how many load-generator machines/connections the benchmark uses? It decides whether connection memory or CPU is our ceiling.
+2026-11-02T04:08:31.851268+00:00Z	Is it OK to skip Nginx and serve port 80 directly? Saves ~15-20% CPU and Nginx's 16k-connection cap.
+2026-11-02T04:08:31.872952+00:00Z	May we read SQLite's file format (B-tree pages) directly for reads instead of going through the SQL engine? Possibly 2-5x faster reads; risk is rule 2/5 interpretation. Writes would still go through SQLite.
