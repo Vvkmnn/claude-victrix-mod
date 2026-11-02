@@ -58,7 +58,7 @@ A note is delivered at once when Claude is idle, or rides your next prompt as co
 - `CORE_RULES.md`: the 7 rules this project is built under.
 - `docs/PLAN.md`: the full plan, with the research behind it. `docs/HANDOFF.md`: where everything is and how to continue.
 - `research/boris.md`: Boris Cherny's method from primary sources, the control every Vada feature must beat. `research/handoff/`, `research/ledger/`: the Anka handoff and the ledger research, verbatim.
-- `bench/`, `runs/`, `formal/Anka.lean`: the handoff's harness, recorded runs and the status-lattice theorems.
+- `bench/`, `runs/`, `formal/Anka.lean`: the handoff's harness, recorded runs and the status-lattice theorems. `runs/` is evidence, kept verbatim: the server submissions in it carry known bugs (unbounded output buffers, default JWT secrets) that the experiments scored; nothing in `runs/` is built, run or installed by the mod, and none of it is fit to deploy.
 
 The lens code began as the plan lens of [claude-emporium](https://github.com/Vvkmnn/claude-emporium) (same author) and is carried on here.
 
