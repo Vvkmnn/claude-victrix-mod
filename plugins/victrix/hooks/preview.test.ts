@@ -88,64 +88,77 @@ async function liveSession($: Engine) {
   await $.tool.call({ tool: 'Edit', tool_use_id: 't3', file_path: '/repo/src/cart.ts', old_string: 'a', new_string: 'b' } as never)
 }
 
-test('preview: the map at a third, 66 columns, while planning', async ($, on) => {
+// The real rungs (form.ts): 50 columns by 50 rows is a 13" MacBook full-screen at the fresh-install share, the
+// width every line is written for; 60 is a 16"; 40 and 24 a dock dragged narrow; 12 and 10 the engine's own
+// narrowing under a dialog; 66 is luxury and no longer previewed.
+test('preview: the map at 27% of a 13-inch MacBook, 50 columns, while planning', async ($, on) => {
   beneath(on)
   await liveSession($)
-  const pane = await mountPane($, 66, 34)
-  print('map-66', 66, (await pane.drawn()) as Drawn)
+  const pane = await mountPane($, 50, 50)
+  print('map-50', 50, (await pane.drawn()) as Drawn)
 })
 
 test('preview: the map held, with the card open on the broken-looking fact', async ($, on) => {
   beneath(on)
   await liveSession($)
-  const pane = await mountPane($, 66, 34, true)
-  await pane.press({ key: 'f:Apply promos:1' })
-  print('card-66', 66, (await pane.drawn()) as Drawn)
+  const pane = await mountPane($, 50, 50, true)
+  await pane.press({ key: 'proof:fact:1' })
+  print('card-50', 50, (await pane.drawn()) as Drawn)
 })
 
-test('preview: the strip at 26 columns while working', async ($, on) => {
-  beneath(on)
-  await liveSession($)
-  await $.prompt.attachment({ ...planNote, type: 'plan_mode_exit' })
-  const pane = await mountPane($, 26, 24)
-  print('strip-26', 26, (await pane.drawn()) as Drawn)
-})
+// The width ladder: one drawing cropped from the right, small rungs first (owner, 2026-11-05).
+for (const columns of [10, 12, 24, 40, 60]) {
+  test(`preview: the pane at ${columns} columns while working, the same drawing cropped`, async ($, on) => {
+    beneath(on)
+    await liveSession($)
+    const pane = await mountPane($, columns, 24)
+    print(`pane-${columns}`, columns, (await pane.drawn()) as Drawn)
+  })
+}
 
-test('preview: the tape at 120 columns when no dock fits', async ($, on) => {
-  beneath(on, false)
-  await liveSession($)
-  const band = await $.ui.mount({ plugin: 'victrix', surface: 'terminal', component: 'AbovePrompt', requestId: 'victrix', props: { hasSurvey: false, isWorking: true, maxRows: 6, bodyColumns: 120, scroll: { offset: 0, bodyRows: 5 }, view: {} } })
-  print('tape-120', 120, (await band.drawn()) as Drawn)
-})
+// The ribbon at a half-screen window (92 columns, no dock seats) and at a fresh Terminal.app window (80).
+for (const columns of [92, 80]) {
+  test(`preview: the ribbon at ${columns} columns when no dock fits`, async ($, on) => {
+    beneath(on, false)
+    await liveSession($)
+    const band = await $.ui.mount({ plugin: 'victrix', surface: 'terminal', component: 'AbovePrompt', requestId: 'victrix', props: { hasSurvey: false, isWorking: true, maxRows: 6, bodyColumns: columns, scroll: { offset: 0, bodyRows: 5 }, view: {} } })
+    print(`tape-${columns}`, columns, (await band.drawn()) as Drawn)
+  })
+}
 
 test('preview: the map with no plan yet', async ($, on) => {
   beneath(on)
   await $.session.start(START)
-  const pane = await mountPane($, 66, 20)
-  print('empty-66', 66, (await pane.drawn()) as Drawn)
+  const pane = await mountPane($, 50, 24)
+  print('empty-50', 50, (await pane.drawn()) as Drawn)
 })
 
 test('preview: the help card', async ($, on) => {
   beneath(on)
   await liveSession($)
-  const pane = await mountPane($, 66, 34, true)
-  await pane.press({ key: 'help' })
-  print('help-66', 66, (await pane.drawn()) as Drawn)
+  const pane = await mountPane($, 50, 50, true)
+  await pane.press({ key: 'k:h' })
+  print('help-50', 50, (await pane.drawn()) as Drawn)
 })
 
 // A film: one session as frames, for a GIF. Each frame is the pane after one more thing happened.
 test('preview film: a session on the discount shop, frame by frame', async ($, on) => {
   beneath(on)
+  // The engine's own band stands beneath the ribbon: once the question is answered the ribbon yields to it.
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return Text({ children: [''] })
+  })
   on('process.run', async (_$, e) => {
     const argv = (e as { argv?: readonly string[] }).argv ?? []
     const isTest = argv.join(' ').includes('bun test')
     return { value: { exitCode: isTest ? 1 : 0, stdout: isTest ? 'cart.spec.ts:\n✗ SAVE50 + SAVE60 on $10 must not go below $0\n  expected ≥ 0, got -10000\n 1 pass\n 2 fail' : 'ok', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
   })
   const frames: string[][] = []
-  const shoot = async (pane: Awaited<ReturnType<typeof mountPane>>) => frames.push(renderAnsi((await pane.drawn()) as Drawn, 66))
+  const shoot = async (pane: Awaited<ReturnType<typeof mountPane>>) => frames.push(renderAnsi((await pane.drawn()) as Drawn, 50))
 
   await $.session.start(START)
-  const pane = await mountPane($, 66, 34)
+  const pane = await mountPane($, 50, 50)
   await shoot(pane)
   await $.prompt.attachment(planNote)
   await shoot(pane)
@@ -163,12 +176,14 @@ test('preview film: a session on the discount shop, frame by frame', async ($, o
   await shoot(pane)
   await $.tool.call({ tool: 'Edit', tool_use_id: 't4', file_path: '/repo/src/cart.ts', old_string: 'total -= promo.offCents', new_string: 'total = Math.max(0, total - promo.offCents)' } as never)
   await shoot(pane)
-  await pane.press({ key: 'no' })
+  // The question is answered on the ribbon above the prompt; the pane only shows what the answer did.
+  const ribbon = await $.ui.mount({ plugin: 'victrix', surface: 'terminal', component: 'AbovePrompt', requestId: 'victrix', props: { hasSurvey: false, isWorking: true, maxRows: 6, bodyColumns: 120, scroll: { offset: 0, bodyRows: 5 }, view: {} } })
+  await ribbon.press({ key: 't:2' })
   await shoot(pane)
   await $.turn.complete({ turnId: 'turn-1' } as never)
   await shoot(pane)
   frames.forEach((rows, index) => {
-    console.log(`@@victrix-preview film-${String(index + 1).padStart(2, '0')} 66`)
+    console.log(`@@victrix-preview film-${String(index + 1).padStart(2, '0')} 50`)
     for (const row of rows) console.log(row)
     console.log('@@end')
   })
@@ -191,23 +206,16 @@ const BIG_PLAN = [
 
 const bigBeneath = (on: On) => beneath(on, true, BIG_PLAN)
 
-test('preview: a forty-step plan at 66 columns and 34 rows folds, never overflows', async ($, on) => {
+test('preview: a forty-step plan at 50 columns and 50 rows folds, never overflows', async ($, on) => {
   bigBeneath(on)
   await liveSession($)
-  const pane = await mountPane($, 66, 34)
-  print('big-66', 66, (await pane.drawn()) as Drawn)
+  const pane = await mountPane($, 50, 50)
+  print('big-50', 50, (await pane.drawn()) as Drawn)
 })
 
-test('preview: a forty-step plan at 44 columns and 40 rows, a third of a 132-column terminal', async ($, on) => {
+test('preview: a forty-step plan quartered, 30 columns and 24 rows (a 110-column terminal at the share, half height)', async ($, on) => {
   bigBeneath(on)
   await liveSession($)
-  const pane = await mountPane($, 44, 40)
-  print('big-44', 44, (await pane.drawn()) as Drawn)
-})
-
-test('preview: the tape at 80 columns drops the flow', async ($, on) => {
-  beneath(on, false)
-  await liveSession($)
-  const band = await $.ui.mount({ plugin: 'victrix', surface: 'terminal', component: 'AbovePrompt', requestId: 'victrix', props: { hasSurvey: false, isWorking: true, maxRows: 6, bodyColumns: 80, scroll: { offset: 0, bodyRows: 5 }, view: {} } })
-  print('tape-80', 80, (await band.drawn()) as Drawn)
+  const pane = await mountPane($, 30, 24)
+  print('big-30', 30, (await pane.drawn()) as Drawn)
 })

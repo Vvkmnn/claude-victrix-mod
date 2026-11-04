@@ -5,8 +5,13 @@
 
 export const SEP = '⋅'
 
-/** Cells a string takes on the terminal: one per code point for the glyphs this kit allows. */
-export const cells = (text: string): number => Array.from(text).length
+// East Asian wide and emoji ranges take two cells; a combining mark takes none. The person's own words reach the
+// pane (a plan title, a claim, a file name), so the count must hold for them, not only for the kit's glyphs.
+const WIDE = /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦\u{1F300}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{20000}-\u{3FFFD}]/u
+const cellsOfChar = (char: string): number => (/\p{M}/u.test(char) ? 0 : WIDE.test(char) ? 2 : 1)
+
+/** Cells a string takes on the terminal: one per code point, two for a wide character, none for a combining mark. */
+export const cells = (text: string): number => Array.from(text).reduce((sum, char) => sum + cellsOfChar(char), 0)
 
 /**
  * A line cut to `columns` cells with an ellipsis; the one place every row is cut. Width 0 draws nothing,
@@ -15,9 +20,17 @@ export const cells = (text: string): number => Array.from(text).length
 export const fit = (text: string, columns: number): string => {
   const room = Math.max(0, Math.floor(columns))
   if (room === 0) return ''
-  const chars = Array.from(text)
-  if (chars.length <= room) return text
-  return room === 1 ? '…' : `${chars.slice(0, room - 1).join('')}…`
+  if (cells(text) <= room) return text
+  if (room === 1) return '…'
+  let used = 0
+  const kept: string[] = []
+  for (const char of Array.from(text)) {
+    const next = used + cellsOfChar(char)
+    if (next > room - 1) break
+    kept.push(char)
+    used = next
+  }
+  return `${kept.join('')}…`
 }
 
 export type Tally = { readonly ok: string; readonly bad: string; readonly running: string; readonly rest: string }

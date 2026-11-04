@@ -4,6 +4,8 @@
 
 export type Drawn = { readonly type: string; readonly props?: Record<string, unknown>; readonly children?: readonly unknown[] } | string | null | undefined
 
+// The colours the lens names: the 16 ANSI names, the engine's theme keys as the dark preset paints them (close
+// enough to judge by eye; the person's own theme paints the real pane), and `rgb(r,g,b)` as truecolour.
 const ANSI: Readonly<Record<string, string>> = {
   yellow: '\u001b[33m',
   green: '\u001b[32m',
@@ -11,6 +13,14 @@ const ANSI: Readonly<Record<string, string>> = {
   blue: '\u001b[34m',
   magenta: '\u001b[35m',
   cyan: '\u001b[36m',
+  success: '\u001b[38;2;152;187;108m',
+  error: '\u001b[38;2;195;64;67m',
+  warning: '\u001b[38;2;220;165;97m',
+  claude: '\u001b[38;2;215;119;87m',
+  inactive: '\u001b[38;2;110;110;125m',
+  subtle: '\u001b[38;2;84;84;109m',
+  // The maths and the face: Kanagawa's `permission` teal, the owner's own theme, since the preview's background is Kanagawa's too.
+  permission: '\u001b[38;2;122;168;159m',
 }
 const DIM = '\u001b[2m'
 const BOLD = '\u001b[1m'
@@ -19,9 +29,15 @@ const RESET = '\u001b[0m'
 
 type Styled = { readonly text: string; readonly style: string }
 
+const colourCode = (colour: string): string => {
+  const rgb = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(colour)
+  if (rgb) return `\u001b[38;2;${rgb[1]};${rgb[2]};${rgb[3]}m`
+  return ANSI[colour] ?? ''
+}
+
 const styleOf = (props: Record<string, unknown>): string =>
   [
-    typeof props.color === 'string' ? (ANSI[props.color] ?? '') : '',
+    typeof props.color === 'string' ? colourCode(props.color) : '',
     props.dimColor === true ? DIM : '',
     props.bold === true || props.weight === 'semibold' || props.weight === 'bold' ? BOLD : '',
     props.inverse === true ? INVERSE : '',
@@ -49,6 +65,9 @@ const rowsOf = (node: Drawn): Styled[][] => {
       return [[...prefix, ...inner]]
     }
     case 'Box': {
+      // A zero-height box clipped by `overflow: hidden` draws nothing, as the engine clips it: the pane keeps its
+      // hotkeys there so letters work without a word on screen.
+      if (props.height === 0 && props.overflow === 'hidden') return []
       const isRow = props.flexDirection === 'row' || props.flexDirection === 'row-reverse'
       const gap = gapCells(props.gap ?? props.columnGap)
       const parts = children.map(rowsOf).filter(rows => rows.length > 0)

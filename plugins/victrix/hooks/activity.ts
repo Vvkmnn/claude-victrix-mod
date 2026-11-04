@@ -15,7 +15,7 @@ export type Usage = {
 export type ActivityEvent =
   | { readonly kind: 'turn-start' }
   | { readonly kind: 'call-start'; readonly text: string; readonly at?: number }
-  | { readonly kind: 'call-end'; readonly text: string; readonly isOk: boolean; readonly at?: number; readonly ms?: number }
+  | { readonly kind: 'call-end'; readonly text: string; readonly isOk: boolean; readonly isDeclined?: boolean; readonly at?: number; readonly ms?: number }
   | { readonly kind: 'usage'; readonly usage: Usage }
   | { readonly kind: 'turn-end' }
   /** The plan's lit step changed: spend from now on lands on `name` (null when every step is done). */
@@ -94,6 +94,7 @@ export const reduceActivity = (state: Activity, event: ActivityEvent): Activity 
       const line: ActivityLine = {
         text: event.text,
         isOk: event.isOk,
+        ...(event.isDeclined ? { isDeclined: true } : {}),
         at: event.at,
         ms: event.ms,
         step: state.stepNow ?? undefined,
@@ -101,7 +102,8 @@ export const reduceActivity = (state: Activity, event: ActivityEvent): Activity 
         saidBy: state.said === '' ? undefined : state.saidBy,
       }
       const next = { ...state, doing: 'thinking', last: push(state.last, line), said: '', saidBy: 'claude' as const }
-      return event.isOk ? next : spendOn(next, spend => ({ ...spend, fails: spend.fails + 1 }))
+      // A decline is the person's choice, not a failure of Claude's: it never counts against the step.
+      return event.isOk || event.isDeclined ? next : spendOn(next, spend => ({ ...spend, fails: spend.fails + 1 }))
     }
     case 'usage': {
       const spent = sum(event.usage)

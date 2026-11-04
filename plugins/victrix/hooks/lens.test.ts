@@ -178,7 +178,7 @@ for (const surface of SURFACES) {
     const world = beneath(on)
     await $.session.start(START)
     expect(world.registered).toEqual([expect.objectContaining({ name: 'victrix', description: expect.stringContaining('plan') })])
-    expect(world.opened).toEqual([{ id: 'victrix', title: '[-_-]' }])
+    expect(world.opened).toEqual([{ id: 'victrix', title: '[-_-]', backgroundColor: 'transparent' }])
   })
 
   test(`${surface}: a dock the person hid stays hidden at the next session start`, async ($, on) => {
@@ -196,34 +196,21 @@ for (const surface of SURFACES) {
     expect(world.opened.at(-1)).toMatchObject({ id: 'victrix', focus: true })
   })
 
-  test(`${surface}: the dock is the map at a quarter of the terminal in plan mode and stays so after it`, async ($, on) => {
+  test(`${surface}: the dock is the map at 27% of the terminal in plan mode and stays so after it`, async ($, on) => {
     const world = beneath(on, { files: { [PATH]: PLAN } })
     await $.session.start(START)
     await $.command.run(RUN)
     await $.prompt.attachment(planNote(PATH))
-    expect(world.opened.at(-1)?.columns).toBe(40)
+    expect(world.opened.at(-1)?.columns).toBe(43)
     await $.prompt.attachment(planNote(PATH, undefined, 'plan_mode_exit'))
-    expect(world.opened.at(-1)?.columns).toBe(40)
-  })
-
-  test(`${surface}: the form button cycles tape, map, strip, auto and the choice is kept`, async ($, on) => {
-    const world = beneath(on, { files: { [PATH]: PLAN } })
-    await $.session.start(START)
-    await $.command.run(RUN)
-    const pane = await mountPane($)
-    await pane.press({ key: 'form' })
-    expect(world.store['victrix.form']).toBe('tape')
-    expect(world.closed.at(-1)).toMatchObject({ id: 'victrix' })
-    await pane.press({ key: 'form' })
-    expect(world.store['victrix.form']).toBe('third')
-    expect(world.opened.at(-1)?.columns).toBe(40)
+    expect(world.opened.at(-1)?.columns).toBe(43)
   })
 
   test(`${surface}: q hides the dock and keeps it hidden`, async ($, on) => {
     const world = beneath(on)
     await $.session.start(START)
     const pane = await mountPane($)
-    await pane.press({ key: 'hide' })
+    await pane.press({ key: 'k:q' })
     expect(world.closed).toEqual([expect.objectContaining({ id: 'victrix' })])
     expect(world.store[`victrix.hidden:${CWD}`]).toBe(true)
   })
@@ -236,24 +223,30 @@ for (const surface of SURFACES) {
     await $.prompt.attachment(planNote(PATH))
     const pane = await mountPane($)
     const texts = await textsOf(pane)
-    expect(texts).toContain('[o_O]')
-    expect(texts).toContain(' 1/3')
-    // The lit step carries its clock inside the bracket: `[◉ 0s] ` in the kit, where no time has passed.
-    expect(texts.some(text => /^\[◉ \d+s\] $/.test(text))).toBe(true)
-    expect(texts).toContain('Lens')
-    expect(texts).toContain('plans are hard to follow')
-    expect(texts).toContain('prices are in cents')
-    expect(texts).toContain('cut every row, 1 compare')
-    expect(texts).toContain('one screen')
-    expect(texts.some(text => text.startsWith('─ now '))).toBe(true)
-    expect(texts.some(text => text.startsWith('─ you '))).toBe(true)
-    expect(texts.some(text => text.startsWith('─ did '))).toBe(true)
-    expect(texts.some(text => text.startsWith('─ gauges '))).toBe(true)
-    expect(texts.some(text => text.startsWith('status = ⊓ {'))).toBe(true)
-    expect(texts).toContain('Gaits')
-    expect((await pane.findAll({ type: 'Text' })).find(text => text.text === 'Lens')?.props.color).toBe('yellow')
-    // An assumed fact is quiet: dim, with the △ carrying the meaning; red is kept for broken and needs-you.
-    expect((await pane.findAll({ type: 'Text' })).find(text => text.text === 'prices are in cents')?.props.dimColor).toBe(true)
+    const drawn = texts.join('')
+    // The hub: one face, the plan bar out of its right wall, the count with its unit.
+    expect(texts).toContain('-_-')
+    expect(drawn).toContain('│ -_- ┝')
+    expect(drawn).toContain('1/3 steps')
+    expect(drawn).toContain('╰──┰──╯')
+    // The spine: green beside the done step, orange beside the live one, with its clock in the time column.
+    expect(drawn).toMatch(/┃\s+\d+s\s+▶ Lens/)
+    expect(drawn).toContain('✓ Crab')
+    expect(drawn).toContain('○ Gaits')
+    // Proof: the meet in notation, the fact with its glyph and one word, the check with its verify line.
+    expect(drawn).toContain('Lens ⊑ ⊓ {')
+    expect(drawn).toContain('△ prices are in cents')
+    expect(drawn).toContain('unchecked')
+    expect(drawn).toContain('⊢ one screen')
+    expect(drawn).toContain('proof')
+    expect(drawn).toContain('doing')
+    // No zone rules, no gauges, no tree glyphs, nothing of the old labels.
+    expect(drawn).not.toContain('─ now ')
+    expect(drawn).not.toContain('gauges')
+    expect(drawn).not.toContain('├')
+    expect((await pane.findAll({ type: 'Text' })).find(text => text.text === 'Lens')?.props.color).toBe('rgb(215,119,87)')
+    // An assumed fact is quiet: the theme's text with the △ carrying the meaning; red is kept for broken and needs-you.
+    expect((await pane.findAll({ type: 'Text' })).find(text => text.text === 'prices are in cents')?.props.color).toBeUndefined()
   })
 
   test(`${surface}: every row fits the pane: no Text wider than the body`, async ($, on) => {
@@ -278,7 +271,7 @@ for (const surface of SURFACES) {
     world.files.set(PATH, PLAN.replace('- [ ] **Lens**', '- [x] **Lens**'))
     await $.tool.call({ tool: 'Edit', tool_use_id: 't1', file_path: PATH, old_string: 'a', new_string: 'b' } as never)
     const pane = await mountPane($)
-    expect(await textsOf(pane)).toContain(' 2/3')
+    expect(await joined(pane)).toContain('2/3 steps')
     expect(await joined(pane)).toContain('Lens ⋅ open → done')
   })
 
@@ -298,7 +291,7 @@ for (const surface of SURFACES) {
     await $.prompt.attachment(planNote(`${PLANS}/ghost-not-written-yet.md`))
     const pane = await mountPane($)
     const drawn = await joined(pane)
-    expect(drawn).toContain('[◉')
+    expect(drawn).toContain('▶ Lens')
     expect(drawn).not.toContain('cannot read the plan')
     expect(drawn).not.toContain('step removed')
     expect(world.read.filter(path => path.endsWith('ghost-not-written-yet.md')).length).toBeGreaterThan(0)
@@ -373,7 +366,7 @@ for (const surface of SURFACES) {
     const world = beneath(on, { files: { [PATH]: PLAN }, store: { [`victrix.planPath:${CWD}`]: PATH } })
     await $.session.start(START)
     expect(world.read).toContain(PATH)
-    expect(await textsOf(await mountPane($))).toContain(' 1/3')
+    expect(await joined(await mountPane($))).toContain('1/3 steps')
   })
 
   test(`${surface}: /victrix <path> follows the named plan, relative to the repo`, async ($, on) => {
@@ -387,13 +380,15 @@ for (const surface of SURFACES) {
     beneath(on, { store: { [`victrix.planPath:${CWD}`]: PATH } })
     await $.session.start(START)
     const texts = await textsOf(await mountPane($))
-    expect(texts.some(text => text.startsWith('  cannot read the plan ⋅ '))).toBe(true)
+    expect(texts.some(text => text.includes('cannot read the plan · '))).toBe(true)
   })
 
-  test(`${surface}: with no plan anywhere the dock says where a plan comes from`, async ($, on) => {
+  test(`${surface}: with no plan anywhere the pane says so and how one comes`, async ($, on) => {
     beneath(on)
     await $.session.start(START)
-    expect(await textsOf(await mountPane($))).toContain('  no plan yet ⋅ when Claude plans (shift+tab) it shows here')
+    const drawn = await joined(await mountPane($))
+    expect(drawn).toContain('no plan yet')
+    expect(drawn).toContain('shift+tab')
   })
 
   test(`${surface}: with no plan followed it offers the newest plan files, newest first, and a press follows one`, async ($, on) => {
@@ -407,8 +402,8 @@ for (const surface of SURFACES) {
     await $.session.start(START)
     const pane = await mountPane($)
     const texts = await textsOf(pane)
-    expect(texts.findIndex(text => text.startsWith('  ○ Brave otter'))).toBeLessThan(texts.findIndex(text => text.startsWith('  ○ Older plan')))
-    await pane.press({ key: `p:${PATH}` })
+    expect(texts.indexOf('Brave otter')).toBeLessThan(texts.indexOf('Older plan'))
+    await pane.press({ key: `plan:${PATH}` })
     expect(world.store[`victrix.planPath:${CWD}`]).toBe(PATH)
   })
 
@@ -425,54 +420,50 @@ for (const surface of SURFACES) {
     await settle()
     const pane = await mountPane($)
     expect(await joined(pane)).toContain('read cart.ts')
-    expect(await textsOf(pane)).toContain('[o_O]')
+    expect(await textsOf(pane)).toContain('-_-')
     held.open()
     await call
-    expect(await joined(pane)).toContain('read cart.ts')
+    expect(await joined(pane)).toContain('✓ read cart.ts')
   })
 
-  test(`${surface}: a failed call marks the flow and the ledger, and the face worries`, async ($, on) => {
-    on('tool.call', { tool: 'Bash' }, async () => ({ deny: 'no' }) as never)
+  test(`${surface}: a failed call is red in doing and counts against the step; a declined one is dim and counts for nothing`, async ($, on) => {
+    on('tool.call', { tool: 'Bash' }, async () => ({ isError: true, result: 'boom' }) as never)
+    on('tool.call', { tool: 'Write' }, async () => ({ deny: 'the person said no' }) as never)
     beneath(on, { files: { [PATH]: PLAN } })
     await $.session.start(START)
     await $.prompt.attachment(planNote(PATH))
     await $.tool.call({ tool: 'Bash', tool_use_id: 't1', command: 'npm test' } as never)
+    await $.tool.call({ tool: 'Write', tool_use_id: 't2', file_path: '/repo/src/a.ts', content: 'x' } as never)
     const pane = await mountPane($)
-    expect(await joined(pane)).toContain('run npm test ✗')
-    expect(await textsOf(pane)).toContain('[o_O]')
+    const texts = await pane.findAll({ type: 'Text' })
+    expect(texts.find(text => text.text.startsWith('run npm test'))?.props.color).toBe('error')
+    const declined = texts.find(text => text.text.includes('declined by you'))
+    expect(declined?.props.color).toBeUndefined()
+    expect(declined?.props.dimColor).toBe(true)
+    expect(await joined(pane)).toContain('1 failed')
   })
 
   // Steering
 
-  test(`${surface}: j and k move the selection along the trunk while the pane is held`, async ($, on) => {
-    beneath(on, { files: { [PATH]: PLAN } })
-    await $.session.start(START)
-    await $.prompt.attachment(planNote(PATH))
-    const pane = await mountPane($)
-    expect(await selectedOf(pane)).toContain('Lens')
-    await pane.press({ key: 'up' })
-    expect(await selectedOf(pane)).toContain('Parser')
-    await pane.press({ key: 'down' })
-    await pane.press({ key: 'down' })
-    expect(await selectedOf(pane)).toContain('prices are in cents')
-  })
-
-  test(`${surface}: every vim key is on a labelled button while the pane is held`, async ($, on) => {
+  test(`${surface}: the keys live behind ?: bound while the pane is held, none while it is loose, and no labels either way`, async ($, on) => {
     beneath(on, { files: { [PATH]: PLAN } })
     await $.session.start(START)
     await $.prompt.attachment(planNote(PATH))
     const held = await mountPane($)
-    expect(await keysOf(held)).toEqual(expect.arrayContaining(['d', 'a', 'w', 'y', 'm', 'h', 'q', 'j', 'k', 'e']))
+    expect(await keysOf(held)).toEqual(expect.arrayContaining(['d', 'a', 'w', 'e', 'h', 'q']))
+    // A key carries no word of its own on screen: the rows are the only buttons with text, and `?` is the one control.
+    const keyed = (await held.findAll({ type: 'Button' })).filter(button => button.props.hotkey !== undefined)
+    expect(keyed.every(button => String(button.props.label ?? '') === '')).toBe(true)
+    expect(await joined(held)).toContain('?')
   })
 
-  test(`${surface}: with the pane loose the keys are hidden and the buttons are plain words`, async ($, on) => {
+  test(`${surface}: with the pane loose no letter key is bound`, async ($, on) => {
     beneath(on, { files: { [PATH]: PLAN } })
     await $.session.start(START)
     await $.prompt.attachment(planNote(PATH))
     const loose = await $.ui.mount({ plugin: 'victrix', surface, component: 'Pane', requestId: 'victrix', props: { ...PANE_PROPS, isFocused: false } })
     expect((await keysOf(loose)).filter(key => /[a-z]/.test(key))).toEqual([])
-    const labels = (await loose.findAll({ type: 'Button' })).map(button => String(button.props.label ?? ''))
-    expect(labels).toEqual(expect.arrayContaining(['doubt', 'add a fact', 'wrong path', 'explain', 'help']))
+    expect(await joined(loose)).toContain('?')
   })
 
   test(`${surface}: d while Claude is idle sends the doubt to Claude at once, as a prompt, and logs it`, async ($, on) => {
@@ -529,11 +520,14 @@ for (const surface of SURFACES) {
     await $.prompt.attachment(planNote(PATH))
     const pane = await mountPane($)
     await pane.press({ key: 'add' })
-    expect(await joined(pane)).toContain('add a fact ⋅ Lens')
+    // The ask lives on the ribbon above the prompt, never in the pane.
+    const ribbon = await mountBand($)
+    expect(await joined(ribbon)).toContain('add a fact · Lens')
+    expect(await joined(pane)).not.toContain('add a fact')
     await $.prompt.submit(TYPED('prices are integers in cents'))
     expect(world.submitted[0]?.context?.[0]).toContain('ADD DATA for step "Lens": prices are integers in cents.')
-    expect(await textsOf(pane)).toContain('prices are integers in cents')
-    await pane.press({ key: `f:Lens:1` })
+    expect(await joined(pane)).toContain('prices are integers in cents')
+    await pane.press({ key: 'proof:fact:1' })
     expect(await joined(pane)).toContain('you said so ⋅ not checked yet')
   })
 
@@ -544,7 +538,7 @@ for (const surface of SURFACES) {
     const pane = await mountPane($)
     await pane.press({ key: 'add' })
     await $.prompt.submit({ ...TYPED('/victrix'), command: { name: 'victrix', args: '' } } as never)
-    expect(await joined(pane)).toContain('add a fact ⋅ Lens')
+    expect(await joined(await mountBand($))).toContain('add a fact · Lens')
   })
 
   test(`${surface}: a verb with no plan says so and sends nothing`, async ($, on) => {
@@ -555,68 +549,80 @@ for (const surface of SURFACES) {
     expect(world.submitted).toEqual([])
   })
 
-  test(`${surface}: e opens the card in English and maths, and y copies the step`, async ($, on) => {
-    const world = beneath(on, { files: { [PATH]: PLAN } })
+  test(`${surface}: e opens the card: notation on the left, words on the right, the meet and the step's because`, async ($, on) => {
+    beneath(on, { files: { [PATH]: PLAN } })
     await $.session.start(START)
     await $.prompt.attachment(planNote(PATH))
     const pane = await mountPane($)
-    await pane.press({ key: 'open' })
+    await pane.press({ key: 'k:e' })
     const texts = await textsOf(pane)
-    expect(texts.some(text => text.startsWith('  says '))).toBe(true)
-    expect(texts.some(text => text.startsWith('  maths '))).toBe(true)
-    expect(texts.some(text => text.startsWith('  proved '))).toBe(true)
-    expect(texts).toContain('status ≤ every premise')
-    expect(texts.some(text => text.includes('status = ⊓ {'))).toBe(true)
-    expect(texts).toContain('plans are hard to follow')
-    await pane.press({ key: 'copy' })
-    expect(world.copied[0]).toContain('Lens')
-    expect(world.copied[0]).toContain('because: plans are hard to follow')
+    expect(texts.some(text => text.includes('says'))).toBe(true)
+    expect(texts.some(text => text.includes('Lens ⊑ ⊓'))).toBe(true)
+    expect(texts.some(text => text.includes('{ △'))).toBe(true)
+    expect(texts.some(text => text.includes('because') && text.includes('plans are hard to follow'))).toBe(true)
+    expect(texts.some(text => text.includes('∴'))).toBe(true)
+    await pane.press({ key: 'close' })
+    expect(await joined(pane)).toContain('▶ Lens')
   })
 
-  test(`${surface}: the help card names it once and nothing else on screen does`, async ($, on) => {
+  test(`${surface}: the ? popup names it once, teaches the ladder and the keys, and nothing else on screen names it`, async ($, on) => {
     beneath(on, { files: { [PATH]: PLAN } })
     await $.session.start(START)
     await $.prompt.attachment(planNote(PATH))
     const pane = await mountPane($)
     const before = await joined(pane)
     expect(before).not.toContain('Victrix')
-    await pane.press({ key: 'help' })
+    await pane.press({ key: 'k:h' })
     const after = await joined(pane)
     expect(after.split('Victrix').length - 1).toBe(1)
+    expect(after).toContain('✗ ⊑ △ ⊑ ◇ ⊑ ■ ⊑ ◆')
+    expect(after).toContain('d doubt')
+    expect(after).toContain('Tao')
   })
 
   // Gut checks and the engine's dialogs
 
   test(`${surface}: a fact Claude made raises one question; no, check it doubts the fact and asks only once`, async ($, on) => {
     const world = beneath(on, { files: { [PATH]: PLAN } })
+    // The engine's own band stands beneath the ribbon: once the question is answered the ribbon yields to it.
+    on('ui.render', { component: 'AbovePrompt' }, async ($, e) => {
+      const { Text } = $.ui.resolve(e)
+      return Text({ children: ['the engine'] })
+    })
     await $.session.start(START)
     await $.prompt.attachment(planNote(PATH))
     const pane = await mountPane($)
-    expect(await joined(pane)).toContain('feel right?  prices are in cents')
-    await pane.press({ key: 'no' })
+    // The question is the ribbon's, above the prompt, with the fewest words; the pane never asks.
+    const ribbon = await mountBand($)
+    expect(await joined(ribbon)).toContain('assumes prices are in cents')
+    expect(await joined(pane)).not.toContain('assumes prices')
+    await ribbon.press({ key: 't:2' })
     expect(world.submitted[0]?.text).toContain('DOUBT on step "Lens"')
     expect(world.store[`victrix.asked:${CWD}`]).toEqual(['feel|Lens|prices are in cents'])
-    expect(await joined(pane)).not.toContain('feel right?')
-    await pane.press({ key: 'f:Lens:0' })
+    expect(await joined(ribbon)).not.toContain('assumes prices')
+    await pane.press({ key: 'proof:fact:0' })
     expect(await joined(pane)).toContain('you doubted it ⋅ re-check pending')
   })
 
-  test(`${surface}: an AskUserQuestion in flight shows its question, shrinks the dock, and clears when answered`, async ($, on) => {
+  test(`${surface}: an AskUserQuestion in flight shows its question on the ribbon, leaves the pane as it is, and clears when answered`, async ($, on) => {
     const held = gate()
     on('tool.call', { tool: 'AskUserQuestion' }, async () => { await held.until; return { result: 'ok' } as never })
-    const world = beneath(on, { files: { [PATH]: PLAN } })
+    const world = beneath(on, { files: { [PATH]: PLAN.replace(' · facts: claude: prices are in cents', '') } })
+    on('ui.render', { component: 'AbovePrompt' }, async ($, e) => {
+      const { Text } = $.ui.resolve(e)
+      return Text({ children: ['the engine'] })
+    })
     await $.session.start(START)
     await $.command.run(RUN)
     await $.prompt.attachment(planNote(PATH))
     const call = $.tool.call({ tool: 'AskUserQuestion', tool_use_id: 't1', questions: [{ question: 'Which colour?', header: 'c', options: [], multiSelect: false }] } as never)
     await settle()
-    const pane = await mountPane($)
-    expect(await joined(pane)).toContain('? Which colour?')
-    expect(world.opened.at(-1)?.columns).toBe(24)
+    const ribbon = await mountBand($)
+    expect(await joined(ribbon)).toContain('? Which colour?')
+    expect(world.opened.at(-1)?.columns).toBe(43)
     held.open()
     await call
-    expect(await joined(pane)).not.toContain('Which colour?')
-    expect(world.opened.at(-1)?.columns).toBe(40)
+    expect(world.opened.at(-1)?.columns).toBe(43)
   })
 
   // The tape
@@ -627,16 +633,16 @@ for (const surface of SURFACES) {
     await $.prompt.attachment(planNote(PATH))
     const band = await mountBand($)
     const texts = await textsOf(band)
-    expect(texts).toContain('[o_O]')
-    expect(texts.some(text => /^\[◉ Lens \d+s\]$/.test(text))).toBe(true)
-    expect(texts).toContain('feel right?  prices are in cents')
+    expect(texts).toContain('[-_-]')
+    expect(texts.some(text => /^▶ Lens \d+s$/.test(text))).toBe(true)
+    expect(texts).toContain('assumes prices are in cents')
     expect(await joined(band)).toContain('because plans are hard to follow')
     const rows = await rowsOf(band, BAND_PROPS.bodyColumns)
     expect(rows.length).toBe(2)
     for (const row of rows) expect(Array.from(row).length).toBeLessThanOrEqual(BAND_PROPS.bodyColumns)
   })
 
-  test(`${surface}: the tape is one row at rest and never wider than the band, down to 40 columns`, async ($, on) => {
+  test(`${surface}: the ribbon is one row at rest and never wider than its site, down to 40 columns`, async ($, on) => {
     beneath(on, { files: { [PATH]: PLAN.replace(' · facts: claude: prices are in cents', '') }, placed: false })
     await $.session.start(START)
     await $.prompt.attachment(planNote(PATH))
@@ -644,13 +650,13 @@ for (const surface of SURFACES) {
       const band = await $.ui.mount({ plugin: 'victrix', surface, component: 'AbovePrompt', requestId: `victrix-${bodyColumns}`, props: { ...BAND_PROPS, bodyColumns } as typeof BAND_PROPS })
       const rows = await rowsOf(band, bodyColumns)
       expect(rows.length).toBe(1)
-      expect(rows[0]).toContain('[◉ Lens')
+      expect(rows[0]).toContain('▶ Lens')
       expect(Array.from(rows[0] ?? '').length).toBeLessThanOrEqual(bodyColumns)
     }
   })
 
-  test(`${surface}: the tape yields to the engine while the dock is placed`, async ($, on) => {
-    beneath(on, { files: { [PATH]: PLAN } })
+  test(`${surface}: the ribbon yields to the engine while the pane is placed and nothing waits`, async ($, on) => {
+    beneath(on, { files: { [PATH]: PLAN.replace(' · facts: claude: prices are in cents', '') } })
     on('ui.render', { component: 'AbovePrompt' }, async ($, e) => {
       const { Text } = $.ui.resolve(e)
       return Text({ children: ['the engine'] })

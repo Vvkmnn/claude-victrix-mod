@@ -86,6 +86,8 @@ export type RecentPlan = { readonly path: string; readonly title: string; readon
 export type ActivityLine = {
   readonly text: string
   readonly isOk: boolean
+  /** The person (or the permission system) declined the call: drawn as a decline, never as a failure. */
+  readonly isDeclined?: boolean
   readonly at?: number
   readonly ms?: number
   readonly step?: string
@@ -157,7 +159,7 @@ declare module 'claude-code' {
       /** Every claim under every step, keyed by step and words; checks and answers replace in place. */
       claims: readonly Claim[]
       /** The person's standing choice of form: tape, third, strip, or auto. */
-      formChoice: 'tape' | 'third' | 'strip' | 'auto'
+      formChoice: 'tape' | 'third' | 'auto'
       /** Counts up while a call runs on the terminal: spinner frame and pulse position. */
       tick: number
       /** The questions an AskUserQuestion in flight asks, until it returns. */
