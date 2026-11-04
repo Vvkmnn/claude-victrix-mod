@@ -220,7 +220,7 @@ test('fit keeps a line that fits and cuts a longer one to the cell count with an
   expect(fit('exactly10!', 10)).toBe('exactly10!')
   expect(fit('a much longer line', 10)).toBe('a much lo…')
   expect(fit('▾ ◉ Lens and more', 8)).toBe('▾ ◉ Len…')
-  expect(fit('anything', 0)).toBe('…')
+  expect(fit('anything', 0)).toBe('')
 })
 
 test('outline of an empty plan is empty', () => {
@@ -233,4 +233,63 @@ test('a 40 KB plan parses every item', () => {
 
   expect(tree.sections[0]?.items).toHaveLength(800)
   expect(tree.sections[0]?.items[799]?.name).toBe('item 799')
+})
+
+test('the push tags parse: because, facts with sources, guard, options, verify and slow', () => {
+  const tree = parsePlan(
+    [
+      '# T',
+      '## In Progress',
+      '- [ ] **Feed** — read the last 20 rows · because: ids are dense, so the tail is the newest, over sorting every row · facts: data: ids are dense 1..n · facts: you: time never decreases · assume: promos never exceed the price · guard: check the last id = count, else fall back to SQL, 1 compare · options: cache promo lookups (2×) · option: skip the JSON parse (3×) · verify: bun test · slow: sort all rows then take 20',
+    ].join('\n'),
+  )
+  const feed = tree.sections[0]?.items[0]
+  expect(feed?.why).toBe('ids are dense, so the tail is the newest, over sorting every row')
+  expect(feed?.facts).toEqual([
+    { text: 'ids are dense 1..n', source: 'data' },
+    { text: 'time never decreases', source: 'you' },
+    { text: 'promos never exceed the price', source: 'claude' },
+  ])
+  expect(feed?.assumptions).toEqual(['ids are dense 1..n', 'time never decreases', 'promos never exceed the price'])
+  expect(feed?.guard).toBe('check the last id = count, else fall back to SQL, 1 compare')
+  expect(feed?.options).toEqual(['cache promo lookups (2×)', 'skip the JSON parse (3×)'])
+  expect(feed?.judge).toBe('bun test')
+  expect(feed?.slow).toBe('sort all rows then take 20')
+  expect(feed?.note).toBe('read the last 20 rows')
+})
+
+test('the old tags still parse the same way, and wording that assumes stays a fact from the wording', () => {
+  const tree = parsePlan(['# T', '## In Progress', '- [ ] **Panel** — the pane should fit · why: plans are long · judge: one screen · assume: prices are in cents'].join('\n'))
+  const panel = tree.sections[0]?.items[0]
+  expect(panel?.why).toBe('plans are long')
+  expect(panel?.judge).toBe('one screen')
+  expect(panel?.facts).toEqual([
+    { text: 'prices are in cents', source: 'claude' },
+    { text: 'the pane should fit', source: 'wording' },
+  ])
+  expect(panel?.guard).toBe('')
+  expect(panel?.options).toEqual([])
+  expect(panel?.slow).toBe('')
+})
+
+// The demo fixture's plan, verbatim, through the real parser: the three planted claims must be found where the demo expects them.
+const FIXTURE_PLAN = "# Discount codes for the shop\n\n**Progress: 1/6 done** | Active: Apply promos\n\nGoal: add stackable discount codes without ever charging below zero. Effort: as much as it takes; money is involved. Verify: every total checked against the obvious slow version (sum the lines, subtract each promo) on generated carts including the extremes.\n\n## Summary\n\nAdd stackable discount codes to the shop. The scary part is a total that goes negative when two codes stack; the slow version in cart.ts is the spec.\n\n## Done\n\n- [x] **Cart total** \u2014 sum of price \u00d7 qty over the lines \u00b7 facts: code: applyPromosSlow in cart.ts floors the total at zero \u00b7 verify: bun test\n\n## In Progress\n\n- [ ] **Apply promos** \u2014 subtract each promo from the cart total \u00b7 because: one rule in one place, chosen over capping each promo at its line \u00b7 facts: data: prices in the seed are integers in cents \u00b7 facts: claude: promos never exceed the price \u00b7 guard: if total < 0 then clamp to 0 and log the cart, 1 compare per cart \u00b7 options: cache promo lookups per request (2\u00d7 on the hot path) \u00b7 verify: bun test \u00b7 slow: sum every line, then subtract every promo in order\n\n## Up Next\n\n- [ ] **Stacking rules** \u2014 which codes may stack \u00b7 facts: claude: a code is used at most once per cart \u00b7 verify: property test over random code lists\n- [ ] **Refunds** \u2014 refund the promo share proportionally \u00b7 facts: claude: refunds are rare, so the slow path is fine \u00b7 slow: recompute the whole cart\n- [ ] **Show the total** \u2014 in the cart view, with the promos listed\n- [ ] **Ship** \u2014 behind a flag, 10% of carts first\n\n---\n\n## Detail: Apply promos\n\nProse only, no checkboxes. The clamp is the guard; the differential against applyPromosSlow is the check.\n"
+
+test('the discount-shop fixture plan parses: the lit step, its tags, and the three planted claude facts', () => {
+  const tree = parsePlan(FIXTURE_PLAN)
+  const now = nowItem(tree)
+  expect(now?.name).toBe('Apply promos')
+  expect(now?.why).toContain('one rule in one place')
+  expect(now?.guard).toContain('clamp to 0')
+  expect(now?.options).toEqual(['cache promo lookups per request (2× on the hot path)'])
+  expect(now?.judge).toBe('bun test')
+  expect(now?.slow).toContain('subtract every promo')
+  expect(now?.facts).toEqual(expect.arrayContaining([
+    { text: 'prices in the seed are integers in cents', source: 'data' },
+    { text: 'promos never exceed the price', source: 'claude' },
+  ]))
+  const planted = tree.sections.flatMap(section => section.items).flatMap(item => item.facts.filter(fact => fact.source === 'claude').map(fact => fact.text))
+  expect(planted).toEqual(['promos never exceed the price', 'a code is used at most once per cart', 'refunds are rare, so the slow path is fine'])
+  expect(itemNamed(tree, 'Cart total')?.facts).toEqual([{ text: 'applyPromosSlow in cart.ts floors the total at zero', source: 'code' }])
+  expect(itemNamed(tree, 'Cart total')?.isDone).toBe(true)
 })

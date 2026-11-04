@@ -1,8 +1,42 @@
 {
   "name": "victrix",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Follow and steer Claude's plan live: where it is, what it just did, and the assumptions that would change the plan.",
   "license": "Apache-2.0",
-  "author": { "name": "vvkmnn" },
-  "types": "./types/index.d.ts"
+  "author": {
+    "name": "vvkmnn"
+  },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "push": {
+      "type": "boolean",
+      "description": "Append Boris's three lines and the facts/guard/options/verify/slow tags to the plan-mode reminder",
+      "default": true,
+      "title": "Push toward proofs"
+    },
+    "questions": {
+      "type": "boolean",
+      "description": "Ask one gut-check question per new Claude-made fact or 2× option under the step being worked",
+      "default": true,
+      "title": "Gut-check questions"
+    },
+    "check": {
+      "type": "boolean",
+      "title": "Check tool",
+      "description": "Register the check tool Claude can call to turn a fact, guard or verify line into evidence (test, differential, fuzz, lean)",
+      "default": true
+    },
+    "review": {
+      "type": "boolean",
+      "title": "Review before each step",
+      "description": "When a step finishes, Claude previews the next one in three lines with its premises and asks the questions that would change it before any tool call",
+      "default": true
+    },
+    "motion": {
+      "type": "boolean",
+      "title": "Motion",
+      "description": "The spinner on the running call, the breathing face and the arrival flash; off keeps every fact and drops the animation",
+      "default": true
+    }
+  }
 }

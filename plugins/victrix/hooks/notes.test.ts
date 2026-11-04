@@ -12,7 +12,7 @@ const add: Note = { kind: 'add', step: 'Panel', text: 'prices are integers in ce
 test('every verb has a lowercase key and a visible label', () => {
   expect(VERBS.map(verb => [verb.kind, verb.hotkey, verb.label])).toEqual([
     ['doubt', 'd', 'doubt'],
-    ['add', 'a', 'add data'],
+    ['add', 'a', 'add a fact'],
     ['wrong', 'w', 'wrong path'],
   ])
   for (const verb of VERBS) expect(verb.hotkey).toMatch(/^[a-z]$/)
@@ -20,7 +20,7 @@ test('every verb has a lowercase key and a visible label', () => {
 
 test('describeNote names the verb and the step, and the fact when there is one', () => {
   expect(describeNote(doubt)).toBe('doubt · V1 The live lens')
-  expect(describeNote(add)).toBe('add data · Panel · prices are integers in cents')
+  expect(describeNote(add)).toBe('add a fact · Panel · prices are integers in cents')
 })
 
 test('deliveryText tells Claude to act at its next step, one imperative line per note, never a question back', () => {
@@ -34,7 +34,7 @@ test('deliveryText tells Claude to act at its next step, one imperative line per
 })
 
 test('logLine is an ISO time and the note', () => {
-  expect(logLine(add)).toBe('2026-11-03T01:02:03.000Z add data · Panel · prices are integers in cents')
+  expect(logLine(add)).toBe('2026-11-03T01:02:03.000Z add a fact · Panel · prices are integers in cents')
 })
 
 test('appendLog keeps the newest LOG_KEPT lines, newest last, and never mutates', () => {

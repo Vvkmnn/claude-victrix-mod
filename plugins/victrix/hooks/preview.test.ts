@@ -1,0 +1,213 @@
+// Not a test of behaviour: a preview. Each scenario mounts the instrument, lays the drawn tree out as ANSI rows
+// and prints them between markers, so `demo/preview.sh` can turn them into PNGs to look at. The one assertion is
+// the owner's: no row wider than its site.
+import { expect, mock, test } from 'claude-code/testing'
+import type { Engine, TestBody } from 'claude-code/testing'
+
+import { renderAnsi, renderPlain } from './render'
+import type { Drawn } from './render'
+
+type On = Parameters<TestBody>[1]
+
+const HOME = '/home/me'
+const PLANS = `${HOME}/.claude/plans`
+const PATH = `${PLANS}/discount.md`
+const CWD = '/repo'
+
+const PLAN = [
+  '# Discount codes for the shop',
+  '**Progress: 2/7 done** | Active: Apply promos',
+  '## Summary',
+  'Add discount codes to the shop. The scary part is a total that goes negative when two codes stack.',
+  '## Done',
+  '- [x] **Schema** — promos table',
+  '- [x] ~~**Coupons v1**~~ — abandoned: replaced by promos',
+  '## In Progress',
+  '- [ ] **Apply promos** — subtract each promo · because: one rule in one place, over capping each promo · facts: data: prices in the seed are integers in cents · facts: claude: promos never exceed the price · guard: if total < 0 clamp to 0 and log, 1 compare · options: cache promo lookups per request (2×) · verify: bun test · slow: sum every line, then subtract every promo',
+  '- [ ] **Show the total** — in the cart view · verify: snapshot test',
+  '## Up Next',
+  '- [ ] **Stacking rules** — facts: claude: a code is used at most once per cart',
+  '- [ ] **Receipts**',
+  '- [ ] **Refunds** — facts: claude: refunds are rare, so the slow path is fine',
+  '- [ ] **Admin screen**',
+  '- [ ] **Ship**',
+].join('\n')
+
+const beneath = (on: On, placed = true, planText = PLAN) => {
+  const store: Record<string, unknown> = {}
+  on('store.get', async (_$, e) => ({ value: store[e.key] }))
+  on('store.set', async (_$, e) => {
+    store[e.key] = e.value
+    return { value: undefined }
+  })
+  on('store.delete', async () => ({ value: undefined }))
+  on('store.keys', async () => ({ value: [] }))
+  mock.env(on, { HOME })
+  on('ui.log', async () => ({ value: undefined }))
+  on('ui.toast', async () => ({ value: undefined }))
+  on('session.start', async (_$, e) => ({ cwd: e.cwd }))
+  on('command.register', async (_$, e) => ({ value: { command: e.name } }))
+  on('ui.open', async () => ({ value: placed ? { isPlaced: true } : { isPlaced: false, reason: 'narrow' } }))
+  on('ui.close', async () => ({ value: undefined }))
+  on('fs.read', async (_$, e) => {
+    if (e.path === PATH) return { value: planText }
+    throw new Error(`ENOENT: ${e.path}`)
+  })
+  on('fs.list', async () => ({ value: [] }))
+  on('prompt.attachment', async (_$, e) => ({ text: e.text }))
+  on('prompt.submit', async (_$, e) => ({ text: e.text, context: e.context }))
+  on('turn.start', async (_$, e) => ({ turnId: e.turnId }))
+  on('turn.complete', async () => ({ text: '' }))
+  on('tool.call', async (_$, e) => (e.tool === 'Bash' ? { deny: 'exit 1: SAVE50 + SAVE60 on $10 = −$1' } : { result: 'ok' }) as never)
+}
+
+const START = { cwd: CWD, surface: 'terminal', isInteractive: true } as const
+
+const planNote = { type: 'plan_mode', text: 'Plan mode is active.', origin: { kind: 'engine' }, detail: { reminder: 'full', planFilePath: PATH, hasPlan: true } } as const
+
+const print = (name: string, columns: number, tree: Drawn) => {
+  const rows = renderAnsi(tree, columns)
+  console.log(`@@victrix-preview ${name} ${columns}`)
+  for (const row of rows) console.log(row)
+  console.log('@@end')
+  for (const row of renderPlain(tree, columns)) expect(Array.from(row).length).toBeLessThanOrEqual(columns)
+}
+
+const paneProps = (columns: number, rows: number, isFocused = false) => ({ title: '[-_-]', isFocused, bodyColumns: columns, placement: 'dock', scroll: { offset: 0, bodyRows: rows }, view: {} }) as const
+
+const mountPane = ($: Engine, columns: number, rows: number, isFocused = false) =>
+  $.ui.mount({ plugin: 'victrix', surface: 'terminal', component: 'Pane', requestId: 'victrix', props: paneProps(columns, rows, isFocused) })
+
+// A session mid-work: a plan followed, one failed check, one call running, one note queued.
+async function liveSession($: Engine) {
+  await $.session.start(START)
+  await $.prompt.attachment(planNote)
+  await $.turn.start({ turnId: 'turn-1', prompt: 'go' } as never)
+  await $.tool.call({ tool: 'Read', tool_use_id: 't1', file_path: '/repo/src/cart.ts' } as never)
+  await $.tool.call({ tool: 'Bash', tool_use_id: 't2', command: 'bun test' } as never)
+  await $.tool.call({ tool: 'Edit', tool_use_id: 't3', file_path: '/repo/src/cart.ts', old_string: 'a', new_string: 'b' } as never)
+}
+
+test('preview: the map at a third, 66 columns, while planning', async ($, on) => {
+  beneath(on)
+  await liveSession($)
+  const pane = await mountPane($, 66, 34)
+  print('map-66', 66, (await pane.drawn()) as Drawn)
+})
+
+test('preview: the map held, with the card open on the broken-looking fact', async ($, on) => {
+  beneath(on)
+  await liveSession($)
+  const pane = await mountPane($, 66, 34, true)
+  await pane.press({ key: 'f:Apply promos:1' })
+  print('card-66', 66, (await pane.drawn()) as Drawn)
+})
+
+test('preview: the strip at 26 columns while working', async ($, on) => {
+  beneath(on)
+  await liveSession($)
+  await $.prompt.attachment({ ...planNote, type: 'plan_mode_exit' })
+  const pane = await mountPane($, 26, 24)
+  print('strip-26', 26, (await pane.drawn()) as Drawn)
+})
+
+test('preview: the tape at 120 columns when no dock fits', async ($, on) => {
+  beneath(on, false)
+  await liveSession($)
+  const band = await $.ui.mount({ plugin: 'victrix', surface: 'terminal', component: 'AbovePrompt', requestId: 'victrix', props: { hasSurvey: false, isWorking: true, maxRows: 6, bodyColumns: 120, scroll: { offset: 0, bodyRows: 5 }, view: {} } })
+  print('tape-120', 120, (await band.drawn()) as Drawn)
+})
+
+test('preview: the map with no plan yet', async ($, on) => {
+  beneath(on)
+  await $.session.start(START)
+  const pane = await mountPane($, 66, 20)
+  print('empty-66', 66, (await pane.drawn()) as Drawn)
+})
+
+test('preview: the help card', async ($, on) => {
+  beneath(on)
+  await liveSession($)
+  const pane = await mountPane($, 66, 34, true)
+  await pane.press({ key: 'help' })
+  print('help-66', 66, (await pane.drawn()) as Drawn)
+})
+
+// A film: one session as frames, for a GIF. Each frame is the pane after one more thing happened.
+test('preview film: a session on the discount shop, frame by frame', async ($, on) => {
+  beneath(on)
+  on('process.run', async (_$, e) => {
+    const argv = (e as { argv?: readonly string[] }).argv ?? []
+    const isTest = argv.join(' ').includes('bun test')
+    return { value: { exitCode: isTest ? 1 : 0, stdout: isTest ? 'cart.spec.ts:\n✗ SAVE50 + SAVE60 on $10 must not go below $0\n  expected ≥ 0, got -10000\n 1 pass\n 2 fail' : 'ok', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  const frames: string[][] = []
+  const shoot = async (pane: Awaited<ReturnType<typeof mountPane>>) => frames.push(renderAnsi((await pane.drawn()) as Drawn, 66))
+
+  await $.session.start(START)
+  const pane = await mountPane($, 66, 34)
+  await shoot(pane)
+  await $.prompt.attachment(planNote)
+  await shoot(pane)
+  await $.turn.start({ turnId: 'turn-1', prompt: 'go' } as never)
+  const read = $.tool.call({ tool: 'Read', tool_use_id: 't1', file_path: '/repo/src/cart.ts' } as never)
+  await new Promise<void>(resolve => setTimeout(() => resolve(), 20))
+  await shoot(pane)
+  await read
+  const run = $.tool.call({ tool: 'Bash', tool_use_id: 't2', command: 'bun test' } as never)
+  await new Promise<void>(resolve => setTimeout(() => resolve(), 20))
+  await shoot(pane)
+  await run
+  await shoot(pane)
+  await $.tool.call({ tool: 'mcp__victrix__check', tool_use_id: 't3', step: 'Apply promos', says: 'promos never exceed the price', kind: 'test', command: ['bun', 'test', 'cart.spec.ts'] } as never)
+  await shoot(pane)
+  await $.tool.call({ tool: 'Edit', tool_use_id: 't4', file_path: '/repo/src/cart.ts', old_string: 'total -= promo.offCents', new_string: 'total = Math.max(0, total - promo.offCents)' } as never)
+  await shoot(pane)
+  await pane.press({ key: 'no' })
+  await shoot(pane)
+  await $.turn.complete({ turnId: 'turn-1' } as never)
+  await shoot(pane)
+  frames.forEach((rows, index) => {
+    console.log(`@@victrix-preview film-${String(index + 1).padStart(2, '0')} 66`)
+    for (const row of rows) console.log(row)
+    console.log('@@end')
+  })
+  expect(frames.length).toBe(9)
+})
+
+// A big plan, as the owner's real ones are: forty steps with tags, so the fit ladder's folding is seen, not assumed.
+const BIG_PLAN = [
+  '# A forty-step plan',
+  '**Progress: 12/40 done** | Active: Step 13',
+  '## Summary',
+  'A long plan that no one can read whole; the lens must still show where Claude is and what it leans on.',
+  '## Done',
+  ...Array.from({ length: 12 }, (_, n) => `- [x] **Step ${n + 1}** — done work · verify: bun test`),
+  '## In Progress',
+  '- [ ] **Step 13** — the one being worked · because: the owner asked for it first · facts: claude: the cache is warm by then · facts: data: the seed has 2,000 rows · guard: if rows > 10,000 then stream, 1 compare · options: parse in a worker (3×) · verify: bun test · slow: read every row twice',
+  '## Up Next',
+  ...Array.from({ length: 27 }, (_, n) => `- [ ] **Step ${n + 14}** — later work${n % 3 === 0 ? ' · facts: claude: this will be easy' : ''}`),
+].join('\n')
+
+const bigBeneath = (on: On) => beneath(on, true, BIG_PLAN)
+
+test('preview: a forty-step plan at 66 columns and 34 rows folds, never overflows', async ($, on) => {
+  bigBeneath(on)
+  await liveSession($)
+  const pane = await mountPane($, 66, 34)
+  print('big-66', 66, (await pane.drawn()) as Drawn)
+})
+
+test('preview: a forty-step plan at 44 columns and 40 rows, a third of a 132-column terminal', async ($, on) => {
+  bigBeneath(on)
+  await liveSession($)
+  const pane = await mountPane($, 44, 40)
+  print('big-44', 44, (await pane.drawn()) as Drawn)
+})
+
+test('preview: the tape at 80 columns drops the flow', async ($, on) => {
+  beneath(on, false)
+  await liveSession($)
+  const band = await $.ui.mount({ plugin: 'victrix', surface: 'terminal', component: 'AbovePrompt', requestId: 'victrix', props: { hasSurvey: false, isWorking: true, maxRows: 6, bodyColumns: 80, scroll: { offset: 0, bodyRows: 5 }, view: {} } })
+  print('tape-80', 80, (await band.drawn()) as Drawn)
+})

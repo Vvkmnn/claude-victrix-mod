@@ -1,16 +1,43 @@
-# What running the lens proved about Claude Code mods
+# Mod API facts, proved by running them
 
-Each line was seen live (Claude Code 2.1.29x–2.1.316, Oct–Nov 2026) while building the first lens prototype and then Vada. Verify against the current `plugin-authoring` types before relying on one across versions.
+Facts about the Claude Code mods API (build 2.1.316, `claude plugin validate` / `claude plugin test`, the bundled `plugin-authoring` types) that the `victrix` mod hit while being built. Each one cost a failed run; none is from the docs alone. Dated where the date matters.
 
-- `$` is followed across files only into `function` declarations, transitively. An arrow bound to a name that takes `$` makes the module fail to load ("$ is passed to … a name bound to a function expression").
-- Tests need hooks beneath the mod for every noun it calls; the kit's bottom hook throws. Op results are `ValueOrDeny`: `{ value }`. `ui.log` beneath returns `{ value: undefined }`. The kit cannot raise a person's pane close, and its `$` has no `store`: record store writes with your own `store.*` hooks.
-- `Text wrap="truncate"` is not honoured inside a `Button` (rows wrapped onto 2–3 lines). Cut strings to `bodyColumns` yourself (`fit`).
-- The plan path comes from `prompt.attachment` (`plan_mode*`, `detail.planFilePath`). Also adopt the path on an Edit/Write to a `.claude/plans/*.md` file so the lens follows plans where the note never arrives.
-- An unasked pane seats from 144 columns in a fullscreen terminal (110 per `$.ui.open`'s doc); below that it waits. A pane the person opened seats at any width.
-- A throw anywhere in a hook skips the whole hook; the engine says so in the debug log.
-- Button `hotkey` accepts one digit or one lowercase letter only; `?` is refused.
-- `turn.complete` input carries `answer`, `durationMs`, `isAborted`, `turnId`, `reason`; its result is `{ text }`. `prompt.submit` input carries `context?: string[]` a hook may extend; `$.prompt.submit({ text })` runs once the session is idle and arrives with `origin.kind === 'plugin'`.
-- `$.ui.copy({ text, surface })` writes the clipboard of the surface a press came from and answers `{ isCopied }`.
-- Store keys per repo (`victrix.planPath:<cwd>`), so two repos never overwrite each other. A hidden pane stays hidden until the command.
-- Debug loop: `--debug-file` in the scratchpad; trace with `$.ui.log(…, { to: 'debug' })`.
-- In zsh, a shell word beginning with `=` (as in `echo =====`) is a command-path expansion and fails; avoid it in scripts.
+## The engine's scanner (`claude plugin validate`)
+
+- An atom must be declared as a `const` in the file that reads or writes it: `atom({ plugin, key } as const, initial)`. A shared `state.ts` of atoms is refused ("declares state: nothing").
+- A helper that takes `$` must be a `function` declaration; the scanner follows `$` across files only into declarations, so an arrow function hides the calls it makes.
+- Two matcher-less hooks on the same event in one module are refused (`session.start is registered twice without a matcher`). A second hook needs a matcher; `{ isInteractive: [true, false] }` matches every session, `{ tool: [...] }` a tool list.
+- A `userConfig` field needs `type`, `title`, `description`, `default` (`title` missing → "Invalid input: expected string").
+- `MultiEdit` is not a tool name in this build; the typed tool list has `Edit`, `Write`, `NotebookEdit`.
+- `console`, `setTimeout` exist in test files (the kit's environment), not in the hooks module; a `hooks/env.d.ts` declares them for `tsc`.
+
+## Hooks at run time
+
+- A hook that throws is skipped whole, and the engine reports it as `victrix's <event> hook was skipped: …`. Keep hooks total (try/catch, `.catch` on every `$` call that can fail) or a hook beneath never runs.
+- `turn.step` is a stream: `const stream = next(e); for await (const chunk of stream) yield chunk; const result = await stream.result`. Calling `next(e)` twice runs what is beneath twice.
+- `TurnStepThinkingChunk` is `{ kind: 'thinking', index, text }`; whether `text` is populated for every model is unverified (the mod labels anything it keeps as "Claude said").
+- `tool.call` carries no duration; time it with `Date.now()` around `await next(e)` (that includes any permission wait).
+- `$.model.complete({ model: 'haiku', prompt, maxTokens, effort, timeoutMs })` is the documented shape (aliases allowed); `$.model.fork` sees the main thread's context, so a blind back-translation must use `complete`.
+- `$.process.run(argv, { cwd, stdin, timeoutMs })` takes an argv array, no shell; 30 s default, ten minutes at most (`lake build` needs the long one).
+- `Button hotkey` is one digit or one lowercase letter; `?` is refused. A `Client` surface module with `onKey` would take any key, at the cost of a second module.
+- `Text wrap="truncate"` is ignored inside a `Button`; cut strings with `fit()` first.
+- `prompt.attachment` with `type: 'plan_mode'` carries `detail: { reminder: 'full' | 'sparse', planFilePath, hasPlan }`; `text` may be rewritten with `next({ ...e, text })`.
+
+## The dock's width (live, 2026-11-04)
+
+- `$.ui.open({ columns })` is a request: once the person has dragged or keyed the dock's width, "this session's or a kept one" wins over every later request, and the kept width follows them into later sessions. Closing and re-opening the pane does not escape it, and neither does a restart. Proved live 2026-11-04 (`/victrix 80` on a 186-column terminal: "placed", the dock stayed at 24; one drag of its edge moved it and held). A mod can set the width only where nobody has ever dragged. What does move it: dragging the dock's edge, or `Ctrl+X Left` (`pane:grow`) and `Ctrl+X Right` (`pane:shrink`) while the pane has focus (`Ctrl+X Tab` or a click), per the keybindings reference. Since 2.1.306 the dock is capped at `min(45% of the terminal, terminal − 60)` by drag, key and request alike (anthropics/claude-code#103959, open, no reply).
+- The session start carries no terminal width; the mod learns it from `command.run`'s `presentation.columns` (when the person runs `/victrix`) or from a render event's `e.viewport.columns`, which it may read while drawing but not store.
+- A `Client` surface module in a dock does receive pointer `enter`/`leave` in Ghostty (a transparent overlay posted them through `ui.message`), so hover is real; it just cannot resize the dock.
+
+## The test kit (`claude plugin test`)
+
+- Hooks a test registers with `on(...)` stand beneath the plugin and must be registered before the first `$` call in that test.
+- `$.ui.mount(...)` once per test; a second mount of the same site fails. `drawn()` returns the plain tree.
+- There is no `clock.every` beneath a test unless the test answers it; the mod wraps `startTicker` in try/catch.
+- Every `*.test.ts` under the plugin folder is collected, fixtures included; a fixture's own test file must be named otherwise (`cart.spec.ts`).
+- `console.log` from a test reaches the command's output; ESC bytes print as the literal text `\u001b` (the preview script puts the byte back).
+- Timing: a loaded machine makes the kit's 5 s per-test timeout flaky; two runs in parallel showed phantom timeouts that vanished alone.
+
+## Lean (for the `check` tool's lean lane)
+
+- `lake build` in `formal/` is green with Lean 4.35.0 (elan, `~/.elan/bin`); `#print axioms Anka.combine_le_premise` prints `'Anka.combine_le_premise' depends on axioms: [propext, Quot.sound]`, `Anka.guarded_correct` depends on none. Theorems must be named with their namespace.

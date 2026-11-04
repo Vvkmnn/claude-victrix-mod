@@ -1,6 +1,6 @@
 // Began as the plan parser of github.com/Vvkmnn/claude-emporium (plugins/emporium/hooks/plan.ts,
 // Oct 2026, same author); carried on here with tags, assumptions and the summary.
-import type { PlanItem, PlanTree } from '../types'
+import type { ClaimSource, PlanFact, PlanItem, PlanTree } from '../types'
 
 type Row = { readonly depth: number; readonly item: Omit<PlanItem, 'children'> }
 
@@ -8,25 +8,46 @@ const CHECKBOX = /^(\s*)[-*]\s+\[([ xX])\]\s+(.*)$/
 const SECTION = /^##\s+(.+?)\s*$/
 const TITLE = /^#\s+(.+?)\s*$/
 const PROGRESS = /^\*\*Progress:\s*(.+?)\*\*/
-const TAG = /^(why|trade|judge|assume[sd]?):\s*(.*)$/i
+const TAG = /^(why|because|trade|judge|verify|assume[sd]?|facts?|guard|options?|slow):\s*(.*)$/i
+// A fact line may name where it came from: `data: ids are dense`, `you: prices are in cents`.
+const SOURCE = /^(data|code|you|claude):\s*(.*)$/i
 // Wording that leans on something unchecked; the lens shows these lines under their step as △.
 const ASSUMES = /\b(assum\w*|should|probably|likely|presumably|supposedly|expect\w*|guess\w*)\b/i
 
-type Tags = Pick<PlanItem, 'note' | 'why' | 'trade' | 'judge' | 'assumptions'>
+type Tags = Pick<PlanItem, 'note' | 'why' | 'trade' | 'judge' | 'assumptions' | 'facts' | 'guard' | 'options' | 'slow'>
 
 /**
  * Splits a note into its tags. Notes read `plain words · why: … · trade: … · judge: …`; a part
  * without a tag is the plain note, and any part whose wording assumes something is an assumption.
  */
+const factOf = (text: string, fallback: ClaimSource): PlanFact => {
+  const named = SOURCE.exec(text)
+  return named ? { text: (named[2] ?? '').trim(), source: (named[1] ?? '').toLowerCase() as ClaimSource } : { text, source: fallback }
+}
+
 const readTags = (note: string): Tags => {
   const parts = note.split(/\s+·\s+/).map(part => part.trim()).filter(Boolean)
   const tagged = parts.map(part => ({ part, tag: TAG.exec(part) }))
-  const text = (name: string) => tagged.find(({ tag }) => tag?.[1]?.toLowerCase() === name)?.tag?.[2]?.trim() ?? ''
+  const named = (...names: readonly string[]) => tagged.filter(({ tag }) => tag !== null && names.includes((tag[1] ?? '').toLowerCase()))
+  const first = (...names: readonly string[]) => named(...names)[0]?.tag?.[2]?.trim() ?? ''
+  const all = (...names: readonly string[]) => named(...names).map(({ tag }) => tag?.[2]?.trim() ?? '').filter(Boolean)
   const plain = tagged.filter(({ tag }) => tag === null).map(({ part }) => part)
-  const explicit = tagged.filter(({ tag }) => tag?.[1]?.toLowerCase().startsWith('assume')).map(({ tag }) => tag?.[2]?.trim() ?? '')
-  const implied = plain.filter(part => ASSUMES.test(part))
+  // `facts:`/`assume:` lines are facts with a named source; a plain part whose wording assumes something is one from the wording.
+  const explicit = all('facts', 'fact', 'assume', 'assumes', 'assumed').map(text => factOf(text, 'claude'))
+  const implied = plain.filter(part => ASSUMES.test(part)).map(text => factOf(text, 'wording'))
+  const facts = [...explicit, ...implied].filter(fact => fact.text !== '')
 
-  return { note: plain.join(' · '), why: text('why'), trade: text('trade'), judge: text('judge'), assumptions: [...explicit, ...implied].filter(Boolean) }
+  return {
+    note: plain.join(' · '),
+    why: first('why', 'because'),
+    trade: first('trade'),
+    judge: first('judge', 'verify'),
+    assumptions: facts.map(fact => fact.text),
+    facts,
+    guard: first('guard'),
+    options: all('options', 'option'),
+    slow: first('slow'),
+  }
 }
 
 // "**Name** — note" or "~~**Name**~~ — note": the bold part names the item, the rest is its note.
@@ -155,15 +176,8 @@ export const arrange = (rows: readonly OutlineRow[]): { body: OutlineRow[]; tray
   return { body: rows.filter(row => !isFoldedHead(row)), tray: rows.filter(isFoldedHead) }
 }
 
-/**
- * A line cut to `columns` cells with an ellipsis. The lens cuts every string itself because a
- * Text inside a Button does not honor `wrap: truncate` (seen live 2026-10-15: rows wrapped 2-3 lines).
- */
-export const fit = (text: string, columns: number): string => {
-  const room = Math.max(1, Math.floor(columns))
-  const chars = Array.from(text)
-  return chars.length <= room ? text : `${chars.slice(0, room - 1).join('')}…`
-}
+// `fit` lives in draw.ts with the rest of the kit; kept exported here for the callers that import it from plan.
+export { fit } from './draw'
 
 export const sectionKey = (title: string) => `s:${title}`
 export const itemKey = (item: PlanItem) => `i:${item.name}`

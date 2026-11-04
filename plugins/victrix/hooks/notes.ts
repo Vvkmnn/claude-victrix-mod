@@ -8,11 +8,11 @@ export type Verb = { readonly kind: NoteKind; readonly hotkey: string; readonly 
 /** The three verbs, in the order the legend draws them; every one is a key and a visible button. */
 export const VERBS: readonly Verb[] = [
   { kind: 'doubt', hotkey: 'd', label: 'doubt' },
-  { kind: 'add', hotkey: 'a', label: 'add data' },
+  { kind: 'add', hotkey: 'a', label: 'add a fact' },
   { kind: 'wrong', hotkey: 'w', label: 'wrong path' },
 ]
 
-const WORDS: Readonly<Record<NoteKind, string>> = { doubt: 'doubt', add: 'add data', wrong: 'wrong path' }
+const WORDS: Readonly<Record<NoteKind, string>> = { doubt: 'doubt', add: 'add a fact', wrong: 'wrong path' }
 
 /** One short line for a note, as the lens and the log show it. */
 export const describeNote = (note: Note): string =>
