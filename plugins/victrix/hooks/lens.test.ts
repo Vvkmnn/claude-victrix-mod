@@ -272,7 +272,7 @@ for (const surface of SURFACES) {
     await $.tool.call({ tool: 'Edit', tool_use_id: 't1', file_path: PATH, old_string: 'a', new_string: 'b' } as never)
     const pane = await mountPane($)
     expect(await joined(pane)).toContain('2/3 steps')
-    expect(await joined(pane)).toContain('Lens ⋅ open → done')
+    expect(await joined(pane)).toContain('Lens · open → done')
   })
 
   test(`${surface}: the mod sets no status line under the prompt: the pane and the row are its only places`, async ($, on) => {
@@ -304,12 +304,12 @@ for (const surface of SURFACES) {
     await $.prompt.attachment(planNote(PATH))
     await $.prompt.attachment(planNote(other))
     const pane = await mountPane($)
-    expect(await joined(pane)).toContain('following ⋅ Calm heron')
+    expect(await joined(pane)).toContain('following · Calm heron')
     expect(await joined(pane)).not.toContain('step removed')
     world.files.set(other, world.files.get(other)!.replace('- [ ] **Wings**', '- [x] **Wings**'))
     await $.turn.start({ turnId: 'turn-1', prompt: 'go' } as never)
     await $.turn.complete({ turnId: 'turn-1' } as never)
-    expect(await joined(pane)).toContain('Wings ⋅ open → done ⋅ outside this session')
+    expect(await joined(pane)).toContain('Wings · open → done · outside this session')
   })
 
   test(`${surface}: a step flipping to done sends a review of the next step at the turn's end: three lines, premises, questions first`, async ($, on) => {
@@ -327,7 +327,7 @@ for (const surface of SURFACES) {
     expect(review?.text).toContain('status = ⊓ {')
     expect(review?.text).toContain('wait for the answers before any tool call')
     const pane = await mountPane($)
-    expect(await joined(pane)).toContain('review ⋅ Gaits')
+    expect(await joined(pane)).toContain('review · Gaits')
   })
 
   test(`${surface}: many calls on one step with the plan untouched is drift: one ledger line and one message, once per step`, async ($, on) => {
@@ -340,7 +340,7 @@ for (const surface of SURFACES) {
     const drift = world.submitted.filter(one => one.text.includes('DRIFT'))
     expect(drift).toHaveLength(1)
     expect(drift[0]?.text).toContain('25 tool calls on step "Lens"')
-    expect(await joined(await mountPane($))).toContain('drift ⋅ Lens ⋅ 25 calls')
+    expect(await joined(await mountPane($))).toContain('drift · Lens · 25 calls')
     await $.turn.start({ turnId: 'turn-2', prompt: 'go' } as never)
     await $.tool.call({ tool: 'Read', tool_use_id: 'r99', file_path: '/repo/src/99.ts' } as never)
     await $.turn.complete({ turnId: 'turn-2' } as never)
@@ -528,7 +528,7 @@ for (const surface of SURFACES) {
     expect(world.submitted[0]?.context?.[0]).toContain('ADD DATA for step "Lens": prices are integers in cents.')
     expect(await joined(pane)).toContain('prices are integers in cents')
     await pane.press({ key: 'proof:fact:1' })
-    expect(await joined(pane)).toContain('you said so ⋅ not checked yet')
+    expect(await joined(pane)).toContain('you said so · not checked yet')
   })
 
   test(`${surface}: a slash command typed after a is not the fact; the ask stays`, async ($, on) => {
@@ -601,7 +601,7 @@ for (const surface of SURFACES) {
     expect(world.store[`victrix.asked:${CWD}`]).toEqual(['feel|Lens|prices are in cents'])
     expect(await joined(ribbon)).not.toContain('assumes prices')
     await pane.press({ key: 'proof:fact:0' })
-    expect(await joined(pane)).toContain('you doubted it ⋅ re-check pending')
+    expect(await joined(pane)).toContain('you doubted it · re-check pending')
   })
 
   test(`${surface}: an AskUserQuestion in flight shows its question on the ribbon, leaves the pane as it is, and clears when answered`, async ($, on) => {

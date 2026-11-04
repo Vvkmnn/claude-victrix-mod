@@ -71,7 +71,7 @@ test('as the budget shrinks the ladder folds from the least important part first
   }
   const twenty = fitRows({ rows: 10, tree, claims: [] })
   expect(twenty.level).toBeGreaterThanOrEqual(2)
-  expect(twenty.rows.find(row => row.kind === 'chips')?.text).toBe('✓ Schema ⋅ ~ Coupons v1')
+  expect(twenty.rows.find(row => row.kind === 'chips')?.text).toBe('✓ Schema · ~ Coupons v1')
   expect(twenty.rows.find(row => row.kind === 'chips')?.right).toBe('done 1')
 })
 

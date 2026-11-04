@@ -9,7 +9,7 @@ import { EMPTY_ACTIVITY, formatTokens, timeOn } from './activity'
 import * as draw from './draw'
 import { factsOf } from './fit'
 import { GLYPH, MEANING, label as claimLabel, stepStatus, weakest } from './lattice'
-import { LIVE_COLOUR, layout, meetLine, statusWord } from './layout'
+import { LIVE_COLOUR, layout, meetLine, shortClock, statusWord } from './layout'
 import type { LayoutRow, Paint, Press } from './layout'
 import { PANE, acceptEnglish, hiddenKey, loadPlan, pressVerb, verifyStep } from './lens'
 import { VERBS } from './notes'
@@ -175,7 +175,7 @@ const helpRows = (columns: number): CardLine[] => {
   const wrap = (text: string, paint: Paint = 'dim') => draw.wrap(text, Math.max(10, columns - 4)).map(part => line(`    ${part}`, paint))
   return [
     line('    -_-  Victrix', 'math', true),
-    ...wrap('The plan beside the chat: the bar is how much is done, the line down the left is the steps, green behind Claude, orange where Claude is, the bar under it is that step’s calls.'),
+    ...wrap('The plan beside the chat: the bar is how much is done, the line down the left is the steps, green behind Claude, orange where Claude is, the bar under it is the calls of that step.'),
     line(''),
     line('    ✗ ⊑ △ ⊑ ◇ ⊑ ■ ⊑ ◆', 'math', true),
     ...wrap('broken, assumed, checked by you, checked by a tool, proved in the model. A claim climbs only on evidence.'),
@@ -216,7 +216,7 @@ const cardRows = ($: Dollar, opened: string, tree: PlanView['tree'] | null, allC
     pair('∴', claim ? claimLabel(claim) : MEANING[status], 'dim'),
     ...(low && claim === low && under.length > 1 ? [pair('', 'the weakest fact of this step', 'dim')] : []),
     ...(item.why ? [pair('because', item.why, 'dim')] : []),
-    pair('Σ', spend ? `${formatTokens(spend.tokens)} tokens · ${spend.calls} calls · ${spend.fails} failed · t ${draw.clock(timeOn(spent, item.name, now))}` : 'nothing spent yet', 'dim'),
+    pair('Σ', spend ? `${formatTokens(spend.tokens)} tokens · ${spend.calls} calls · ${spend.fails} failed · t ${shortClock(timeOn(spent, item.name, now))}` : 'nothing spent yet', 'dim'),
     ...(claim?.evidence?.english !== undefined ? [pair('english', `${claim.evidence.english}${claim.status === 'proved' ? ' · accepted by you' : ' · by a model that never saw the claim'}`, claim.status === 'proved' ? 'good' : 'dim')] : []),
   ]
   return lines

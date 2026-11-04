@@ -4,6 +4,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { Engine, TestBody } from 'claude-code/testing'
 
+import { GLYPHS } from './layout'
 import { renderAnsi, renderPlain } from './render'
 import type { Drawn } from './render'
 
@@ -70,7 +71,10 @@ const print = (name: string, columns: number, tree: Drawn) => {
   console.log(`@@victrix-preview ${name} ${columns}`)
   for (const row of rows) console.log(row)
   console.log('@@end')
-  for (const row of renderPlain(tree, columns)) expect(Array.from(row).length).toBeLessThanOrEqual(columns)
+  for (const row of renderPlain(tree, columns)) {
+    expect(Array.from(row).length).toBeLessThanOrEqual(columns)
+    for (const char of row) expect(char.charCodeAt(0) < 128 || GLYPHS.has(char) ? '' : `${name}: ${char} (U+${char.codePointAt(0)?.toString(16)})`).toBe('')
+  }
 }
 
 const paneProps = (columns: number, rows: number, isFocused = false) => ({ title: '[-_-]', isFocused, bodyColumns: columns, placement: 'dock', scroll: { offset: 0, bodyRows: rows }, view: {} }) as const

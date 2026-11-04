@@ -29,6 +29,20 @@ Facts about the Claude Code mods API (build 2.1.316, `claude plugin validate` / 
 - The session start carries no terminal width; the mod learns it from `command.run`'s `presentation.columns` (when the person runs `/victrix`) or from a render event's `e.viewport.columns`, which it may read while drawing but not store.
 - A `Client` surface module in a dock does receive pointer `enter`/`leave` in Ghostty (a transparent overlay posted them through `ui.message`), so hover is real; it just cannot resize the dock.
 
+## The pane's width, seat and look
+
+- The dock keeps a width the person dragged or keyed (`Ctrl+X Left` / `Ctrl+X Right`) over any request; see the section above for the proof.
+- The fullscreen layout docks a pane beside the transcript from 110 columns (the `CommandPresentation` doc in the bundled types); below that the pane is placed inline above the prompt. `Pane` props carry `placement: 'dock' | 'inline'`. Not verified: `hooks/form.ts` says an unasked dock seats from 144 columns and a requested one from 110; the types doc says 110. The mod treats under 110 as the ribbon either way.
+- Drawing is pure: the engine redraws a pane on a state change and on a resize (types, line 1583), and no resize event reaches the mod's hooks; only a `Client` surface module receives one. The mod reads `e.viewport.columns` while drawing and never stores it.
+- A plain `Button` draws as `1: label`, so a label carries no digit of its own. A `hotkey` is one digit or one lowercase letter.
+- `$.ui.open` takes `backgroundColor: 'transparent'`, so the person's own terminal background shows instead of the engine's panel grey (`hooks/lens.tsx:310`).
+- Colour is theme keys only (`success`, `error`, `permission`, `inactive`, `subtle`, `claude`), so a theme change recolours the pane. The one exception is the orange constant `rgb(215,119,87)`, Claude Code's own `claude` token in its dark preset, kept whatever the theme (`hooks/layout.ts` `LIVE_COLOUR`). The maths and the face use `permission` (`hooks/pane.tsx` `colourOf`).
+
+## Prompt and notices
+
+- `$.prompt.read()` returns the draft typed so far and the cursor offset (types, `$.prompt`). The mod uses it to hold cautions while the person types. Not verified live in this repo: no hook calls it yet.
+- `$.ui.notify(text, { title })` raises a notification through the person's `preferredNotifChannel`, after their `Notification` hooks run. "Reaches the person on any terminal" is not verified: the types say that with no terminal only the hooks run, and the result can be `{ isSent: false, reason: 'no-channel' | 'no-surface' | ... }`. No hook calls it yet.
+
 ## The test kit (`claude plugin test`)
 
 - Hooks a test registers with `on(...)` stand beneath the plugin and must be registered before the first `$` call in that test.

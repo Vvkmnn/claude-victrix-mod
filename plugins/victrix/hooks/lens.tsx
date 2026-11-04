@@ -84,10 +84,10 @@ export const diffPlans = (before: PlanTree | null, after: PlanTree | null): stri
   const lines: string[] = []
   for (const [name, state] of now) {
     const old = was.get(name)
-    if (old === undefined) lines.push(before === null ? `plan read ⋅ ${name}` : `step added ⋅ ${name}`)
-    else if (old !== state) lines.push(`${name} ⋅ ${old} → ${state}`)
+    if (old === undefined) lines.push(before === null ? `plan read · ${name}` : `step added · ${name}`)
+    else if (old !== state) lines.push(`${name} · ${old} → ${state}`)
   }
-  for (const name of was.keys()) if (!now.has(name)) lines.push(`step removed ⋅ ${name}`)
+  for (const name of was.keys()) if (!now.has(name)) lines.push(`step removed · ${name}`)
   return before === null ? lines.slice(0, 1) : lines
 }
 
@@ -142,7 +142,7 @@ async function checkDrift($: Dollar) {
   const calls = spent.steps[step]?.calls ?? 0
   if (calls - callsAtPlanEdit < DRIFT_CALLS) return
   driftNudged = step
-  await noteChange($, `drift ⋅ ${step} ⋅ ${calls} calls, plan untouched`)
+  await noteChange($, `drift · ${step} · ${calls} calls, plan untouched`)
   void $.prompt.submit({ text: driftText(step, calls) })
 }
 
@@ -151,7 +151,7 @@ async function sendReview($: Dollar) {
   reviewFor = undefined
   if (!isReview || item === undefined) return
   const premises = factsOf(item, await read($, claims))
-  await noteChange($, `review ⋅ ${item.name} ⋅ ${premises.length} premises ⋅ ${GLYPH[stepStatus(premises)]}`)
+  await noteChange($, `review · ${item.name} · ${premises.length} premises · ${GLYPH[stepStatus(premises)]}`)
   void $.prompt.submit({ text: reviewText(item, premises) })
 }
 
@@ -167,7 +167,7 @@ export async function acceptEnglish($: Dollar, claim: Claim) {
   if (claim.evidence === undefined || claim.evidence.kind !== 'lean') return
   const lifted = proved(claim, claim.evidence, true, Date.now())
   await update($, claims, all => all.map(one => (sameClaim(one, claim) ? lifted : one)))
-  await noteChange($, `${GLYPH[lifted.status]} ${lifted.says} ⋅ ${lifted.status === 'proved' ? 'English accepted by you' : 'English accepted, but the build is not sound'}`)
+  await noteChange($, `${GLYPH[lifted.status]} ${lifted.says} · ${lifted.status === 'proved' ? 'English accepted by you' : 'English accepted, but the build is not sound'}`)
 }
 
 async function record($: Dollar, event: ActivityEvent) {
@@ -201,7 +201,7 @@ export async function loadPlan($: Dollar, path: string, source: PlanSource) {
   const isSwitch = before !== null && tree !== null && followed?.path !== path && tree.title !== before.title
   // The ledger compares two plans that read. A switch to another plan is one line, never a step-removed line per
   // item; a change that arrived by any hand but this session's own says so.
-  const lines = isSwitch ? [`following ⋅ ${tree?.title ?? path}`] : diffPlans(before, tree)
+  const lines = isSwitch ? [`following · ${tree?.title ?? path}`] : diffPlans(before, tree)
   const outside = !isSwitch && before !== null && lines.length > 0 && (source === 'watch' || source === 'note')
   // The watch re-reads the same file: an unchanged plan is no event, so the drift count and the lit clock stand.
   if (source === 'watch' && lines.length === 0) return
@@ -218,7 +218,7 @@ export async function loadPlan($: Dollar, path: string, source: PlanSource) {
     await flashOnce($)
   }
   await $.store.set(planPathKey(await read($, cwd)), path)
-  for (const line of lines) await noteChange($, outside ? `${line} ⋅ outside this session` : line)
+  for (const line of lines) await noteChange($, outside ? `${line} · outside this session` : line)
   // A step that just flipped to done, whose verify line is a command, is checked by the mod itself: never blocking, the result lands as a claim.
   if (before !== null && tree !== null && !isSwitch) {
     const finished = newlyDone(before, tree)
@@ -328,7 +328,7 @@ async function deliverNotes($: Dollar) {
   const queued = await read($, notes)
   if (queued.length === 0) return
   await update($, notes, () => [])
-  await record($, { kind: 'said', text: queued.map(describeNote).join(' ⋅ '), by: 'you' })
+  await record($, { kind: 'said', text: queued.map(describeNote).join(' · '), by: 'you' })
   void $.prompt.submit({ text: deliveryText(queued) })
   $.ui.log(`victrix: delivered ${queued.length} note(s) as a prompt`, { to: 'debug' })
 }
@@ -337,7 +337,7 @@ async function deliverNotes($: Dollar) {
 export async function pressVerb($: Dollar, kind: NoteKind, step: string, says?: string) {
   if (kind === 'add') {
     await update($, pendingAdd, () => step)
-    $.ui.toast(`add a fact ⋅ ${step}: type it in the prompt; Claude reads it at its next step`)
+    $.ui.toast(`add a fact · ${step}: type it in the prompt; Claude reads it at its next step`)
     return
   }
   const note: Note = { kind, step, text: says ?? '', at: Date.now() }
@@ -351,9 +351,9 @@ export async function pressVerb($: Dollar, kind: NoteKind, step: string, says?: 
     })
   }
   const working = await read($, isWorking)
-  if (working) $.ui.toast(`${describeNote(note)} ⋅ Claude sees it at its next step`)
+  if (working) $.ui.toast(`${describeNote(note)} · Claude sees it at its next step`)
   else {
-    $.ui.toast(`${describeNote(note)} ⋅ sent to Claude`)
+    $.ui.toast(`${describeNote(note)} · sent to Claude`)
     await deliverNotes($)
   }
 }
@@ -368,15 +368,15 @@ export async function answerQuestion($: Dollar, question: Question, answer: 'yes
       const note: Note = { kind: 'add', step: question.step, text: `build and measure this option: ${question.says}`, at: Date.now() }
       await update($, notes, queued => [...queued, note])
       await logNote($, note)
-      await noteChange($, `build it ⋅ ${question.says}`)
+      await noteChange($, `build it · ${question.says}`)
       if (!(await read($, isWorking))) await deliverNotes($)
-    } else await noteChange($, `${answer === 'no' ? 'declined' : 'not sure about'} ⋅ ${question.says}`)
+    } else await noteChange($, `${answer === 'no' ? 'declined' : 'not sure about'} · ${question.says}`)
     return
   }
   const claim: Claim = { step: question.step, says: question.says, status: 'open', source: answer === 'yes' ? 'you' : answer === 'no' ? 'doubt' : 'claude', at: Date.now() }
   await update($, claims, list => (list.some(one => sameClaim(one, claim)) ? list.map(one => (sameClaim(one, claim) ? claim : one)) : [...list, claim]))
   if (answer === 'no') await pressVerb($, 'doubt', question.step, question.says)
-  else await noteChange($, `${answer === 'yes' ? 'you said so' : 'you were not sure'} ⋅ ${question.says}`)
+  else await noteChange($, `${answer === 'yes' ? 'you said so' : 'you were not sure'} · ${question.says}`)
 }
 
 const resolvePath = (dir: string, path: string) => (path.startsWith('/') ? path : `${dir}/${path}`)
@@ -598,7 +598,7 @@ export const registerLens = (on: On, motion = true, review = true) => {
     const added: Note[] = step !== null && typed !== '' ? [{ kind: 'add', step, text: typed, at: Date.now() }] : []
     for (const note of added) {
       await logNote($, note)
-      await noteChange($, `you added ⋅ ${typed}`)
+      await noteChange($, `you added · ${typed}`)
       await update($, claims, list => [...list, { step, says: typed, status: 'open', source: 'you', at: Date.now() } as Claim])
     }
     const queued = [...(await read($, notes)), ...added]

@@ -101,13 +101,23 @@ export const tokensText = (n: number, columns: number): string => {
   return `${figure}${columns >= 40 ? ' tokens' : ''}`
 }
 
-/** One word for a claim's standing, the glyph already saying the status. */
+/**
+ * The words after a claim, the glyph already saying the status: `⊢ <what established it>` for evidence, `· stale`
+ * whenever its files moved since, and for an open claim who said it. An open claim from the person reads `you said
+ * so`, never `you` alone: saying is not checking, and `checked by you` is a rung only when they say they ran it.
+ */
 export const statusWord = (claim: Claim): string => {
   if (claim.isChecking) return 'checking'
+  const stale = claim.stale ? ' · stale' : ''
   if (claim.status === 'broken') return claim.counterexample ? `broken: ${claim.counterexample}` : 'broken'
-  if (claim.status === 'proved') return claim.evidence?.theorem ? `⊢ ${claim.evidence.theorem}` : 'proved'
-  if (claim.status === 'checked') return claim.evidence ? `⊢ ${claim.evidence.command.split(' ').slice(0, 2).join(' ')}${claim.stale ? ' · stale' : ''}` : 'checked'
-  return claim.source === 'you' ? 'you' : 'unchecked'
+  if (claim.status === 'proved') return `${claim.evidence?.theorem ? `⊢ ${claim.evidence.theorem}` : 'proved'}${stale}`
+  if (claim.status === 'checked') {
+    const by = claim.evidence?.command.split(' ').filter(Boolean).slice(0, 2).join(' ') ?? ''
+    return `${by ? `⊢ ${by}` : 'checked'}${stale}`
+  }
+  if (claim.source === 'you') return 'you said so'
+  if (claim.source === 'doubt') return 'you doubted it'
+  return 'unchecked'
 }
 
 /** A fact's standing as a status for painting. */
@@ -193,8 +203,10 @@ export const layout = (input: LayoutInput): LayoutRow[] => {
   const hasBar = hasPlan && barRoom >= 3
   const barCells = hasBar ? Math.min(barRoom, BAR_CELLS) : 0
   const bar = hasBar ? draw.line(done.length, counted.length, barCells) : undefined
-  const titleRoom = columns - 7 - (bar ? barCells + 1 + cells(countText) + 3 : 0)
-  const title = tree?.title && titleRoom >= 12 ? draw.fit(tree.title, titleRoom) : ''
+  // The plan's title sits on the box's floor row, under the bar's start, where the eye already is (owner: "too far
+  // to look" at the end of the bar); it is cut from the right and left out under eight cells.
+  const titleRoom = columns - 8
+  const title = hasPlan && tree?.title && titleRoom >= 8 ? draw.fit(tree.title, titleRoom) : ''
   out.push(row('box:top', [span('╭─────╮', 'dim')], columns))
   out.push(
     row(
@@ -204,7 +216,7 @@ export const layout = (input: LayoutInput): LayoutRow[] => {
         span(FACE, 'math', true),
         span(hasBar ? ' ┝' : ' │', 'dim'),
         ...(bar
-          ? [span(bar.filled + bar.half, 'good'), span(bar.rest, 'faint'), span(` ${countText}`, 'dim'), ...(title ? [span(`   ${title}`, 'dim')] : [])]
+          ? [span(bar.filled + bar.half, 'good'), span(bar.rest, 'faint'), span(` ${countText}`, 'dim')]
           : hasPlan
             ? countFits
               ? [span(` ${countText}`, 'dim')]
@@ -214,7 +226,7 @@ export const layout = (input: LayoutInput): LayoutRow[] => {
       columns,
     ),
   )
-  out.push(row('box:bottom', [span(hasPlan ? '╰──┰──╯' : '╰─────╯', 'dim')], columns))
+  out.push(row('box:bottom', [span(hasPlan ? '╰──┰──╯' : '╰─────╯', 'dim'), ...(title ? [span(` ${title}`, 'text', true)] : [])], columns))
 
   // The footer: the only numbers row, left-packed, `?` right after its words: `Σ 12k tokens · t 47m  ?`. A part
   // that would be cut is left out whole (a `Σ` with nothing after it says nothing): the spend goes first, the count
@@ -246,28 +258,65 @@ export const layout = (input: LayoutInput): LayoutRow[] => {
     return out.slice(0, height)
   }
 
-  // Budgets, in the order a short pane keeps them: the box (3), the live step and its bar (2), the one abandoned
-  // row, one gap and the footer (1 each), the problem line, doing at least 3; then proof (up to 4 and a gap), then
-  // the open steps (up to 3), then the done steps as many as remain, newest nearest the live row; whatever is left
-  // goes to doing. Under MIN_ROWS the cut comes from the bottom: the footer and the log go before the spine.
+  // Rows are handed out in one fixed order of wishes, each wish taking what is left, so a taller pane only ever adds
+  // (owner's law, 2026-11-05: a smaller view never holds more than a larger sibling; views evolve, never jump; and a
+  // tall pane uses its rows). The order: the fixed rows (box 3, live step and bar 2, the one abandoned row, the gap
+  // before doing, the footer, the problem line); the log's head and two events; proof with its gap (the meet, two
+  // facts, the check); the next two open steps; every done step, newest nearest the live row; the rest of the facts;
+  // the rest of the open steps; the rest of the log; blank rows last. Under MIN_ROWS the cut comes from the bottom:
+  // the footer and the log go before the spine, the cockpit's declutter order.
   const hasTimes = columns >= 40
   const hasNames = columns >= 24
   const indent = SPINE_COL
   const liveRows = live ? 2 : 0
   const abandonedRows = Math.min(1, abandoned.length)
-  const minDoing = 3
-  let spare = height - 3 - liveRows - abandonedRows - 1 - 1 - problemRows - minDoing
-  const proofAll = live ? proofRows(live, liveFacts, columns, input) : []
-  const proofLines = spare >= 2 ? proofAll.slice(0, Math.max(0, Math.min(proofAll.length, spare - 1))) : []
-  spare -= proofLines.length > 0 ? proofLines.length + 1 : 0
-  const openShown = Math.max(0, Math.min(open.length, 2, spare - (open.length > 2 ? 1 : 0)))
-  const openRows = openShown + (open.length > openShown && spare > openShown ? 1 : 0)
-  spare -= openRows
-  // Done steps take what is left; when they do not all fit, one row says how many are folded, and when not even
-  // that row fits the bar's count carries them alone.
-  const doneRoom = done.length <= Math.max(0, spare) ? done.length : Math.max(0, spare - 1)
+  // The gap before the open steps is counted with their base rows below.
+  const fixed = 3 + liveRows + abandonedRows + 1 + 1 + problemRows
+  let left = height - fixed
+  const take = (want: number): number => {
+    const got = Math.max(0, Math.min(want, left))
+    left -= got
+    return got
+  }
+  const eventCount = 1 + input.spent.last.length + (input.ledger?.length ?? 0)
+  const doingBase = take(Math.min(eventCount, 3))
+  const proofBase = live ? proofRows(live, liveFacts, columns, input, 2) : []
+  // Proof takes its gap and its rows together; one row alone would be a gap with nothing under it, so it is given back.
+  let proofGot = proofBase.length > 0 ? take(proofBase.length + 1) : 0
+  if (proofGot === 1) {
+    left += 1
+    proofGot = 0
+  }
+  // The open steps take their gap with their rows; a gap alone is given back.
+  let openBase = open.length > 0 ? take(1 + Math.min(open.length, 2) + (open.length > 2 ? 1 : 0)) : 0
+  if (openBase === 1) {
+    left += 1
+    openBase = 0
+  }
+  openBase = Math.max(0, openBase - 1)
+  // The live row is the horizon (owner: "the centre line, like a horizon meter"): done steps fill the rows above it
+  // only down to the pane's upper half, then fold into `… N done` so the live step, its block and the tape of open
+  // steps below keep their place; what no other wish takes goes to the done steps last.
+  const horizon = Math.max(0, Math.floor(height * 0.45) - 3 - abandonedRows)
+  const doneBase = take(Math.min(done.length, horizon))
+  // The log is the heart (owner: "I want to watch things happen and fill"): the rest of it comes before the rest of
+  // the facts and the far-off open steps. Open steps past the next two are shown only where their names are, since
+  // a column of bare `○` says nothing more than `+N more` does.
+  const doingExtra = take(Math.max(0, eventCount - doingBase))
+  const doingCount = doingBase + doingExtra
+  const extraFacts = proofGot > 0 ? take(Math.max(0, liveFacts.length - 2)) : 0
+  const openExtra = openBase > 0 && hasNames ? take(Math.max(0, open.length - 2)) : 0
+  const doneGot = doneBase + take(done.length - doneBase)
+  const proofAll = extraFacts > 0 && live ? proofRows(live, liveFacts, columns, input, 2 + extraFacts) : proofBase
+  const proofLines = proofGot > 0 ? proofAll.slice(0, proofGot - 1 + extraFacts) : []
+  // Open steps: the rows taken less one for `+N more` while any stay folded.
+  const openWant = openBase + openExtra
+  const openShown = Math.max(0, Math.min(open.length, openWant - (open.length > openWant ? 1 : 0)))
+  const openRows = openShown + (open.length > openShown && openWant > openShown ? 1 : 0)
+  // Done steps: all when they fit, else one row says how many are folded; with no row at all the bar's count carries them.
+  const doneRoom = doneGot >= done.length ? done.length : Math.max(0, doneGot - 1)
   const doneHidden = Math.max(0, done.length - doneRoom)
-  const hasMoreRow = doneHidden > 0 && spare >= 1
+  const hasMoreRow = doneHidden > 0 && doneGot >= 1
   const doneShown = done.slice(doneHidden)
   /** The column of the marks `✓ ▶ ○`, where a folded count also sits. */
   const markCol = indent + 1 + (hasTimes ? 2 + TIME_CELLS + 2 : 1)
@@ -277,7 +326,7 @@ export const layout = (input: LayoutInput): LayoutRow[] => {
     const spine = mark === '○' ? ' ' : '┃'
     const spinePaint: Paint = mark === '▶' ? 'live' : 'good'
     const time = mark === '✓' ? doneCells(input.spent.steps[item.name]?.ms ?? 0) : mark === '▶' ? shortClock(Math.max(0, input.now - (liveSpend?.enteredAt || input.now)) + (liveSpend?.ms ?? 0)) : ''
-    const spans: Span[] = [span(' '.repeat(indent), 'text'), span(spine, spinePaint, mark === '▶')]
+    const spans: Span[] = [span(' '.repeat(indent), 'text'), span(spine, spinePaint)]
     if (hasTimes) spans.push(span(`  ${time.padStart(TIME_CELLS)}  `, mark === '▶' ? 'live' : 'dim'))
     else if (mark === '▶' && !hasNames) spans.push(span(` ▶ ${time}`, 'live', true))
     else spans.push(span(' ', 'text'))
@@ -295,18 +344,22 @@ export const layout = (input: LayoutInput): LayoutRow[] => {
     out.push(stepRow(live, '▶', 'live'))
     out.push(liveBar(live, liveFacts, liveSpend, input.isCalling, columns))
   }
-  open.slice(0, openShown).forEach(item => out.push(stepRow(item, '○', 'faint')))
-  if (openRows > openShown) out.push(row('open:more', [span(' '.repeat(markCol), 'text'), span(`+${open.length - openShown}${hasNames ? ' more' : ''}`, 'faint')], columns))
-
+  // Proof and doing are the live step's own, so they hang under its bar, and the open steps follow below them: as
+  // steps finish, the block travels down the spine until the last step is at the bottom and the bar is full (owner,
+  // 2026-11-05: "the steps scroll by until it's finally at the bottom and the progress bar completes").
   if (proofLines.length > 0) {
     out.push(blank('gap:proof'))
     out.push(...proofLines)
   }
   out.push(blank('gap:doing'))
-  const used = out.length + problemRows + 1
-  out.push(...doingRows(input, columns, Math.max(1, height - used)))
+  out.push(...doingRows(input, columns, Math.max(1, doingCount)))
   if (input.problem) out.push(row('problem', [span(`    ${input.problem}`, 'bad')], columns))
-  out.push(footer())
+  if (openRows > 0) out.push(blank('gap:open'))
+  open.slice(0, openShown).forEach(item => out.push(stepRow(item, '○', 'faint')))
+  if (openRows > openShown) out.push(row('open:more', [span(' '.repeat(markCol), 'text'), span(`+${open.length - openShown}${hasNames ? ' more' : ''}`, 'faint')], columns))
+  // The footer anchors the bottom row, as a status bar does; the rows between stay empty rather than invent.
+  const padding = Array.from({ length: Math.max(0, height - out.length - 1) }, (_, index) => blank(`pad:${index}`))
+  out.push(...padding, footer())
   return out.slice(0, height)
 }
 
@@ -345,13 +398,15 @@ const liveBar = (live: PlanItem, facts: readonly Claim[], spend: Activity['steps
  * the check line (`⊢ bun test · not run · c`); absent when the step has none. Left-packed: the word follows the
  * claim, the claim is cut so the word always shows; under 40 columns the glyph alone says the status.
  */
-const proofRows = (live: PlanItem, facts: readonly Claim[], columns: number, input: LayoutInput): LayoutRow[] => {
-  if (facts.length === 0 && !live.judge) return []
+const proofRows = (live: PlanItem, facts: readonly Claim[], columns: number, input: LayoutInput, maxFacts: number): LayoutRow[] => {
   const label = (text: string) => marginLabel(text, columns)
   const room = columns - marginCells(columns) - 2
   const hasWords = columns >= 40
+  // A step with nothing assumed and nothing to run says so once, dim, no glyph: the absence is the information
+  // (the `missing` signal of U7 grows from this row).
+  if (facts.length === 0 && !live.judge) return [row('proof:none', [label('proof'), span(hasWords ? 'nothing assumed or checked yet' : 'no facts, no check', 'dim')], columns, { kind: 'step', step: live.name })]
   const rows: LayoutRow[] = []
-  const shown = facts.slice(0, 2)
+  const shown = facts.slice(0, Math.max(0, maxFacts))
   if (facts.length > 0) rows.push(row('proof:meet', [label('proof'), ...meetSpans(live.name, facts, room + 2)], columns, { kind: 'step', step: live.name }))
   shown.forEach((claim, index) => {
     const paint = paintOf(claim.status)
@@ -360,10 +415,14 @@ const proofRows = (live: PlanItem, facts: readonly Claim[], columns: number, inp
     const tail: Span[] = hasWords ? [span(' · ', 'faint'), span(word, claim.status === 'open' ? 'dim' : paint)] : []
     rows.push(row(`proof:fact:${index}`, [label(''), span(`${GLYPH[claim.status]} `, paint), span(says, claim.status === 'open' ? 'text' : paint), ...tail], columns, { kind: 'fact', step: live.name, index }))
   })
-  if (facts.length > 2) rows.push(row('proof:more', [label(''), span(`+${facts.length - 2} more`, 'faint')], columns))
+  if (facts.length > shown.length) rows.push(row('proof:more', [label(''), span(`+${facts.length - shown.length} more`, 'faint')], columns))
   if (live.judge) {
     const result = input.claims.find(claim => claim.step === live.name && claim.source === 'tool' && claim.says === live.judge)
-    const word = result ? (result.status === 'broken' ? `✗ exit ${result.evidence?.exitCode ?? '?'}` : `✓ ${result.evidence ? shortClock(result.evidence.ms) : ''}`.trim()) : 'not run · c'
+    const word = result
+      ? result.status === 'broken'
+        ? result.evidence?.exitCode !== undefined ? `✗ exit ${result.evidence.exitCode}` : '✗ failed'
+        : `✓ passed${result.evidence ? ` ${shortClock(result.evidence.ms)}` : ''}`
+      : 'not run · press c'
     const says = draw.fit(live.judge, hasWords ? Math.max(8, room - cells(word) - 3) : room)
     const tail: Span[] = hasWords ? [span(' · ', 'faint'), span(word, result ? (result.status === 'broken' ? 'bad' : 'good') : 'dim')] : []
     rows.push(row('proof:check', [label(facts.length === 0 ? 'proof' : ''), span('⊢ ', 'math'), span(says, 'text'), ...tail], columns, { kind: 'check', step: live.name }))
@@ -416,7 +475,7 @@ const actionSpans = (line: ActivityLine, columns: number): Span[] => {
 }
 
 /** Every non-ASCII glyph the layout may draw; a kit test fails the build on any other. */
-export const GLYPHS = new Set([...'╭╮╰╯│─┝┰┃┗━╸✓▶○~△◇■◆✗⊑⊓⊢∀∃∈≥≤≠¬⇒∴Σ…·⊘∅', ...draw.SPINNER])
+export const GLYPHS = new Set([...'╭╮╰╯│─┝┰┃┗━╸✓▶○~△◇■◆✗⊑⊓⊢∀∃∈≥≤≠¬⇒∴Σ…·⊘∅╶→×', ...draw.SPINNER])
 
 /** True when every character of every span is ASCII or in the dictionary. */
 export const isInDictionary = (rows: readonly LayoutRow[]): boolean =>

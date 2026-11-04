@@ -50,13 +50,13 @@ test('a step is open until something checks it, and held down by its weakest cla
 
 test('labels come from status and source, never from the model, and name the human as evidence to verify', () => {
   expect(label(claimOf('V1', 'x', 'wording', at))).toBe('I assumed this; nobody checked')
-  expect(label(claimOf('V1', 'x', 'claude', at))).toBe('Claude says ⋅ not checked')
-  expect(label(claimOf('V1', 'x', 'you', at))).toBe('you said so ⋅ not checked yet')
-  expect(label(claimOf('V1', 'x', 'data', at))).toBe('seen in the data ⋅ not checked')
+  expect(label(claimOf('V1', 'x', 'claude', at))).toBe('Claude says · not checked')
+  expect(label(claimOf('V1', 'x', 'you', at))).toBe('you said so · not checked yet')
+  expect(label(claimOf('V1', 'x', 'data', at))).toBe('seen in the data · not checked')
   expect(label({ ...claimOf('V1', 'x', 'tool', at), isChecking: true })).toBe('checking…')
   const run: Evidence = { kind: 'test', command: 'bun test', exitCode: 0, cases: 2000, ms: 800, tail: '2000 pass' }
-  expect(label(checked(claimOf('V1', 'x', 'claude', at), run, at))).toBe('ran 2,000 cases ⋅ tool ran')
-  expect(label({ ...checked(claimOf('V1', 'x', 'claude', at), run, at), stale: true })).toBe('ran 2,000 cases ⋅ tool ran ⋅ stale: the file changed since')
+  expect(label(checked(claimOf('V1', 'x', 'claude', at), run, at))).toBe('ran 2,000 cases · tool ran')
+  expect(label({ ...checked(claimOf('V1', 'x', 'claude', at), run, at), stale: true })).toBe('ran 2,000 cases · tool ran · stale: the file changed since')
 })
 
 test('a failing run makes a claim broken with the last output line as its case; a passing one checked, never proved', () => {
@@ -64,7 +64,7 @@ test('a failing run makes a claim broken with the last output line as its case; 
   const broken = checked(claimOf('V1', 'promos never exceed the price', 'claude', at), fail, at + 1)
   expect(broken.status).toBe('broken')
   expect(broken.counterexample).toBe('SAVE50 + SAVE60 on $10 = −$1')
-  expect(label(broken)).toBe('SAVE50 + SAVE60 on $10 = −$1 ⋅ tool ran')
+  expect(label(broken)).toBe('SAVE50 + SAVE60 on $10 = −$1 · tool ran')
   const pass: Evidence = { kind: 'differential', command: 'diff', exitCode: 0, cases: 12, ms: 10, tail: '' }
   expect(checked(broken, pass, at + 2).status).toBe('checked')
   expect(checked(broken, pass, at + 2).counterexample).toBeUndefined()
@@ -74,7 +74,7 @@ test('proved needs a green build, the three standard axioms, no sorry, and the E
   const green: Evidence = { kind: 'lean', command: 'lake build', exitCode: 0, ms: 1700, tail: 'Build completed successfully', theorem: 'combine_le_own', axioms: ['propext', 'Classical.choice', 'Quot.sound'] }
   const claim = claimOf('A2', 'a conclusion is never stronger than its premises', 'claude', at)
   expect(proved(claim, green, true, at).status).toBe('proved')
-  expect(label(proved(claim, green, true, at))).toBe('by combine_le_own ⋅ lake build green')
+  expect(label(proved(claim, green, true, at))).toBe('by combine_le_own · lake build green')
   expect(proved(claim, green, false, at).status).toBe('checked')
   expect(proved(claim, { ...green, hasSorry: true }, true, at).status).toBe('broken')
   expect(proved(claim, { ...green, axioms: ['propext', 'myAxiom'] }, true, at).status).toBe('broken')

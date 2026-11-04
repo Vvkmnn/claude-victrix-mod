@@ -3,7 +3,8 @@
 // rule is that nothing on the instrument ever overflows. Cells are counted as code points (`Array.from`),
 // which is right for every glyph the kit uses (all single-cell in a monospace terminal; no combining marks).
 
-export const SEP = '⋅'
+// One dot on the whole screen: the middle dot separates facts in words (`92 calls · 2 failed`) and parts of a ledger line.
+export const SEP = '·'
 
 // East Asian wide and emoji ranges take two cells; a combining mark takes none. The person's own words reach the
 // pane (a plan title, a claim, a file name), so the count must hold for them, not only for the kit's glyphs.
@@ -208,7 +209,7 @@ export const twoEnded = (left: string, right: string, width: number): string => 
   return leftCut + ' '.repeat(room - cells(leftCut) - rightCells) + rightCut
 }
 
-/** Items joined by ` ⋅ `, cut to the row. */
+/** Items joined by ` · `, cut to the row. */
 export const chips = (items: readonly string[], width: number): string => fit(items.join(` ${SEP} `), width)
 
 export type InkMark = 'done' | 'now' | 'open'
@@ -252,7 +253,7 @@ const ASCII_MAP: ReadonlyArray<readonly [string, string]> = [
   ['■', '#'],
   ['◆', '<>'],
   ['○', 'o'],
-  ['⋅', '.'],
+  ['·', '.'],
   ['…', '...'],
   ['→', '->'],
 ]

@@ -38,29 +38,29 @@ export const isStandardAxioms = (axioms: readonly string[]): boolean => axioms.e
  */
 export const label = (claim: Pick<Claim, 'status' | 'source' | 'evidence' | 'counterexample' | 'isChecking' | 'stale'>): string => {
   if (claim.isChecking) return 'checking…'
-  const stale = claim.stale ? ' ⋅ stale: the file changed since' : ''
+  const stale = claim.stale ? ' · stale: the file changed since' : ''
   const cases = claim.evidence?.cases
   switch (claim.status) {
     case 'broken':
-      return `${claim.counterexample ?? 'a case fails'} ⋅ tool ran${stale}`
+      return `${claim.counterexample ?? 'a case fails'} · tool ran${stale}`
     case 'proved':
-      return `by ${claim.evidence?.theorem ?? 'the kernel'} ⋅ lake build green${stale}`
+      return `by ${claim.evidence?.theorem ?? 'the kernel'} · lake build green${stale}`
     case 'checked':
-      return `${cases !== undefined ? `ran ${cases.toLocaleString('en-US')} cases ⋅ ` : ''}tool ran${stale}`
+      return `${cases !== undefined ? `ran ${cases.toLocaleString('en-US')} cases · ` : ''}tool ran${stale}`
     case 'open':
       switch (claim.source) {
         case 'wording':
           return 'I assumed this; nobody checked'
         case 'claude':
-          return 'Claude says ⋅ not checked'
+          return 'Claude says · not checked'
         case 'data':
-          return 'seen in the data ⋅ not checked'
+          return 'seen in the data · not checked'
         case 'code':
-          return 'seen in the code ⋅ not checked'
+          return 'seen in the code · not checked'
         case 'you':
-          return 'you said so ⋅ not checked yet'
+          return 'you said so · not checked yet'
         case 'doubt':
-          return 'you doubted it ⋅ re-check pending'
+          return 'you doubted it · re-check pending'
         case 'tool':
         case 'lean':
           return 'not checked'

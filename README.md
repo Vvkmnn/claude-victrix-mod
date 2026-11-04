@@ -3,31 +3,52 @@
 Victrix is a live plan lens for Claude Code, the first mod of the Vada method (Sanskrit *vāda*, a reasoned discussion). It docks beside the chat and walks Claude's plan while Claude works: the step it is on, what that step leans on and whether anything checked it, what Claude did and what it said before doing it, what it spent, and what needs you. Three verbs reach Claude at its next step. Underneath, a `check` tool the mod runs itself turns a plan claim into evidence, and a status lattice proved in Lean (`formal/Anka.lean`) decides what the labels may say.
 
 ```
- ╭─[-_-]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1/8
- │  Add discount codes to the shop. The scary part is a total that goes negative.
- ├ ✓ Schema
- ├ [◉] Apply promos                                                            3m 12s ⋅ 4 calls
- │  ├ △ prices in the seed are integers in cents
- │  ╰ ✗ promos never exceed the price                              SAVE50+SAVE60 on $10 = −$1
- ├ ○ Show the total
- ╰ ○ Ship
- ─ now ─────────────────────────────────────────────────────────────────────────────────────
-   because   one rule in one place, over capping each promo
-   guard     if total < 0 clamp to 0 and log, 1 compare
-   verify    bun test                                                               ✗ failed
-   maths     status = ⊓ {△ ✗} = ✗                                          a premise fails
- ─ you ─────────────────────────────────────────────────────────────────────────────────────
-   ?         feel right?  promos never exceed the price
-             1: yes  2: no, check it  3: not sure
- ─ did ─────────────────────────────────────────────────────────────────────────────────────
-   12:01     read cart.ts                              plan says: one rule in one place
-   12:01     run bun test ✗ 0.8s                       Claude said: the clamp belongs here
- ─ gauges ──────────────────────────────────────────────────────────────────────────────────
-   plan      ━━╸━━━━━━━━━━ 1/8    premises ■0 △3 ✗1   ⊓ plan = ✗
-   ctx       ━━━━━━━━━━━━━ 38%    step 3m 12s ⋅ 4 calls ⋅ 1 ✗ ⋅ 12k tok
-             read cart.ts ▸ run bun test ✗ ▸ ⠹ edit cart.ts              ▁▂▃▅▇▆▃▂  turn 12k
-   doubt  add a fact  wrong path  explain  help  form: auto
+╭─────╮
+│ -_- ┝━━━━━━━━━━━━━━━━ 1/8 steps
+╰──┰──╯ Discount codes for the shop
+   ┃          ✓ Schema
+   ┃          ~ Coupons v1
+   ┃      0s  ▶ Apply promos
+   ┗━━━━━━━━━━━━━━━━ 0/2 checked · 3 calls
+
+    proof  Apply ⊑ ⊓ { △, △ } = △
+           △ prices in the seed are i… · unchecked
+           △ promos never exceed the … · unchecked
+           ⊢ bun test · not run · press c
+
+    doing  ⠋ thinking
+           · plan read · Schema
+           ✓ edit cart.ts
+           ⊘ declined by you  run bun test
+           ✓ read cart.ts
+
+              ○ Show the total
+              ○ Stacking rules
+              +4 more
+    Σ 0 tokens · t 0s  ?
 ```
+
+## What you see
+
+The pane, top to bottom. One drawing at every width; a narrow pane crops it from the right and never re-lays it.
+
+- A small box with the face `-_-`, and the plan bar leaving its right wall with the step count after it.
+- The plan's title under the bar.
+- The spine hangs from the box: green behind Claude, orange at the live step, where it ends as that step's own bar. Open steps below have no line.
+- `proof`: the meet in notation (`Step ⊑ ⊓ { … } = △`), then each fact with one word after it (`unchecked`, `you said so`, `broken: <case>`), then the check and its result.
+- `doing`: the live log, this second first, then the last things Claude did, newest first.
+- The footer on the bottom row, with `?` after its words. `?` is the one visible control; `d` doubt, `a` add a fact, `w` wrong path, `e` explain, `c` check, `h` help and `q` hide sit behind it and work as vim keys while the pane is held.
+
+Colour is meaning: green is done, orange is Claude, red is a failure or you being needed, and the maths and the face share one accent from your theme. Nothing sits flush right.
+
+## Where it fits
+
+The pane asks for 27% of the terminal. The engine keeps a width you dragged over that.
+
+- Full screen on a 13" or 14" MacBook (about 186 to 200 columns): a pane of 50 to 54 columns.
+- Full screen on a 15" or 16" (about 218 to 240 columns): 59 to 65 columns.
+- Half screen or any tmux split (about 92 to 120 columns): under 110 columns no dock seats and the ribbon above the prompt carries the plan; at 110 to 120 a 30 to 32 column pane.
+- A fresh Terminal.app window (80 by 24): the ribbon, until you maximise it.
 
 ## Install
 
@@ -40,26 +61,17 @@ Then start Claude Code in any repo and enter plan mode (shift+tab). The lens ope
 
 To develop against a checkout: `claude --plugin-dir ~/Projects/claude-victrix-mod/plugins/victrix` (hot reload on edit).
 
-## One instrument, three forms
+## The keys
 
-The same content is drawn in one of three forms, never two at once: the **map** (docked at a quarter of the terminal, the home in every mode), the **strip** (13%, under the engine's own dialogs), or the **tape** (three rows above the prompt, when no dock fits). It picks its own form; the `form` button overrides, and the choice sticks per machine. The width is a request: once you drag the dock, the engine keeps your width over anything the mod asks, in this and later sessions. To set it, drag the dock's edge, or click the pane and press `Ctrl+X Left` to widen and `Ctrl+X Right` to narrow (at most 45% of the terminal).
-
-## What it shows, zone by zone
-
-- **The trunk**: the plan as a tree rising into the face. `◉` the step Claude is on (bracketed, with its clock), `✓` done, `○` next, `~` abandoned. Every step that spent anything carries a call tally on its row: one `━` cell per tool call, red for a failure, `╸` for the call running now, the count beside it. It grows call by call and never "completes": there is no honest denominator for how many calls a step should take, so the bar is what the step cost, kept after the step is done, so you compare steps at a glance. Under each open step its premises: `△` assumed (nobody checked), `■` checked by a tool, `◆` proved, `✗` broken, with the failing case on the row.
-- **now**: why the step exists (`because`), its `guard` and price, every `option` worth 2× until built or declined, its `verify` command and whether it ran, the obvious `slow` version, and the maths: `status = ⊓ {premises}`, a step is never above its weakest premise.
-- **you**: the one thing that needs you: a gut-check question with digit answers, the engine's own dialog, or a verb waiting for Claude's next step; else what is next.
-- **did**: every call Claude made, oldest at the top, with the reason named by its source: `Claude said:` (its own thinking words), `plan says:` (the step's because line), or `no reason on record`. Never invented. The ledger (plan diffs, verbs, checks) sits in the same timeline.
-- **gauges**: plan progress with the premises counted and the plan's meet; context with how much the last turn ate (`38% +7/turn`, a count, never a projection) and the step's time, calls, failures and fresh tokens; the flow of the last calls with the running one spinning, a sparkline of tokens per step.
-- **keys**: one row of words; while the pane is held, the letters show (`d a w e h`, then `j k y m q`).
-
-The face is the whole identity: `[-_-]` at rest, `[o_o]` breathing while a call runs, `[o_O]` when something needs you or broke. When Claude moves to the next step the light travels down the trunk to it over half a second, then rests; nothing else moves, and nothing moves while you type. Three colours on your terminal's own palette: yellow for Claude, green for good, red for worried and broken.
-
-## The verbs
+`?` is the one visible control; it opens the help popup. Behind it, as vim keys while the pane is held (each also a click in the popup):
 
 - `d` **doubt**: Claude re-checks what the selected line rests on with a tool before relying on it.
 - `a` **add a fact**: type it in the prompt; it lands under the step as a fact by you, assumed until a tool checks it.
 - `w` **wrong path**: Claude stops that branch, says why it chose it, and proposes another route.
+- `e` **explain**: the card: the line in English, the maths, what was proved (`status ≤ every premise`, `combine_le_premise`), the failing case, the because, what the step spent, what the label holds.
+- `c` **check**: run the live step's check.
+- `h` **help**: this list.
+- `q` **hide** the pane.
 - `e` **explain**: the card: the line in English, the maths, what was proved (`status ≤ every premise`, `combine_le_premise`), the failing case, the because, what the step spent, what the label holds.
 
 A note is delivered at once when Claude is idle, or rides your next prompt while Claude works.
@@ -83,7 +95,7 @@ A step that flips to done with a runnable `verify:` line is checked by the mod i
 
 ## Layout of this repository
 
-- `plugins/victrix/`: the mod. `hooks/lens.tsx` draws the map and the strip, `hooks/tape.tsx` the tape, `hooks/fit.ts` fits the tree to the rows, `hooks/draw.ts` the drawing kit, `hooks/lattice.ts` the status lattice and labels, `hooks/plan.ts` parses plans, `hooks/activity.ts` what Claude did and spent, `hooks/notes.ts` the verbs, `hooks/push.ts` the reminder, `hooks/check.ts` the tool. `types/index.d.ts` is the state contract.
+- `plugins/victrix/`: the mod. `hooks/layout.ts` lays out the pane as rows, `hooks/pane.tsx` paints it, `hooks/tape.tsx` draws the ribbon, `hooks/fit.ts` fits the tree to the rows, `hooks/draw.ts` the drawing kit, `hooks/lattice.ts` the status lattice and labels, `hooks/plan.ts` parses plans, `hooks/activity.ts` what Claude did and spent, `hooks/notes.ts` the verbs, `hooks/push.ts` the reminder, `hooks/check.ts` the tool. `types/index.d.ts` is the state contract.
 - `formal/Anka.lean`: the lattice theorems (`combine_le_own`, `combine_le_premise`, `guarded_correct`, `ratchet`); `lake build` is green on Lean 4.35.
 - `CORE_RULES.md`: the 7 rules. `docs/PLAN.md`, `docs/HANDOFF.md`, `docs/MODS.md`: the plan, where things are, and facts about the mod API proved by running it.
 - `research/boris.md`: Boris Cherny's method from primary sources, the control every feature must beat. `research/handoff/`, `research/ledger/`, `bench/`, `runs/`: the Anka handoff, its harness and recorded runs (evidence, never built or deployed).

@@ -219,7 +219,7 @@ test('test lane: exit 0 is checked with no cases, a ledger line, and the label f
   expect(claim?.evidence?.files).toEqual([{ path: '/repo/src/parse.test.ts', mtimeMs: 1_000 }])
   expect(claim?.isChecking).toBeUndefined()
   expect(answer.split('\n')[0]).toBe('tool ran')
-  expect((ledgerOf(world))[0]).toMatch(/^\d\d:\d\d ■ the parser keeps every line ⋅ ran 1$/)
+  expect((ledgerOf(world))[0]).toMatch(/^\d\d:\d\d ■ the parser keeps every line · ran 1$/)
 })
 
 test('test lane: exit 1 is broken with the last line as the counterexample, replacing the claim in place', async ($, on) => {
@@ -232,8 +232,8 @@ test('test lane: exit 1 is broken with the last line as the counterexample, repl
   const all = claimsOf(world)
   expect(all).toHaveLength(1)
   expect(all[0]).toMatchObject({ status: 'broken', counterexample: 'received 2' })
-  expect(answer.split('\n')[0]).toBe('received 2 ⋅ tool ran')
-  expect((ledgerOf(world))[0]).toMatch(/✗ the parser keeps every line ⋅ received 2$/)
+  expect(answer.split('\n')[0]).toBe('received 2 · tool ran')
+  expect((ledgerOf(world))[0]).toMatch(/✗ the parser keeps every line · received 2$/)
 })
 
 test('the claim reads checking while its command runs', async ($, on) => {
@@ -280,9 +280,9 @@ test('differential: three agreeing inputs are checked with 3 cases, and the tail
   const [claim] = claimsOf(world)
   expect(claim).toMatchObject({ status: 'checked' })
   expect(claim?.evidence).toMatchObject({ kind: 'differential', cases: 3, exitCode: 0 })
-  expect(claim?.evidence?.tail).toContain('coverage: partial ⋅ missing: an empty string, a negative number, a very large number (>= 2^31), NaN, a duplicate')
+  expect(claim?.evidence?.tail).toContain('coverage: partial · missing: an empty string, a negative number, a very large number (>= 2^31), NaN, a duplicate')
   expect(world.runs.map(run => run.stdin)).toEqual(['1', '1', '2', '2', '3', '3'])
-  expect(answer.split('\n')[0]).toBe('ran 3 cases ⋅ tool ran')
+  expect(answer.split('\n')[0]).toBe('ran 3 cases · tool ran')
 })
 
 test('differential: a full list of extremes has no coverage note', async ($, on) => {
@@ -372,7 +372,7 @@ test('lean: a green build, standard axioms and no sorry is checked, not proved, 
   expect(world.prompts[0]).toContain('theorem Anka.two (n : Nat) :\n    n + 0 = n')
   expect(world.prompts[0]).not.toContain('adding zero')
   expect(answer).toContain('English (back-translated, not yet accepted): It says one plus one is two.')
-  expect((ledgerOf(world))[0]).toMatch(/■ adding zero changes nothing ⋅ lake build green ⋅ English: It says one plus one is two\.$/)
+  expect((ledgerOf(world))[0]).toMatch(/■ adding zero changes nothing · lake build green · English: It says one plus one is two\.$/)
 })
 
 test('lean: no model reply leaves the English unconfirmed in the tail', async ($, on) => {
@@ -382,7 +382,7 @@ test('lean: no model reply leaves the English unconfirmed in the tail', async ($
   const [claim] = claimsOf(world)
   expect(claim).toMatchObject({ status: 'checked' })
   expect(claim?.evidence?.axioms).toEqual([])
-  expect(claim?.evidence?.tail).toContain('English unconfirmed ⋅ empty-reply')
+  expect(claim?.evidence?.tail).toContain('English unconfirmed · empty-reply')
 })
 
 test('lean: a sorry in the file is broken', async ($, on) => {

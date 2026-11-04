@@ -126,7 +126,7 @@ test('the trunk prefixes are the one tree, rising into the face', () => {
 
 test('toAscii keeps a row readable without the glyphs', () => {
   expect(toAscii('╭─[-_-]━━╸━━ 6/15')).toBe('+-[-_-]==-== 6/15')
-  expect(toAscii('├ ✓ V0 ⋅ ○ V1 … ▸ ⠹ edit')).toBe('|-v V0 . o V1 ... > * edit')
+  expect(toAscii('├ ✓ V0 · ○ V1 … ▸ ⠹ edit')).toBe('|-v V0 . o V1 ... > * edit')
   expect(toAscii('▁▂▃')).toBe('###')
 })
 

@@ -103,7 +103,7 @@ const detailRows = (item: PlanItem, facts: readonly Claim[], withFacts: boolean,
       })
     })
   } else if (facts.length > 0) {
-    push('fact', '', `${facts.length} facts ⋅ ${counts(facts)}`)
+    push('fact', '', `${facts.length} facts · ${counts(facts)}`)
   }
   if (details === 'all') {
     if (item.guard) push('guard', '', item.guard)
@@ -122,7 +122,7 @@ const chipsRow = (settled: readonly PlanItem[]): MapRow => ({
   kind: 'chips',
   trunk: 'step',
   glyph: '',
-  text: settled.map(item => `${item.isAbandoned ? ABANDONED_GLYPH : DONE_GLYPH} ${item.name}`).join(' ⋅ '),
+  text: settled.map(item => `${item.isAbandoned ? ABANDONED_GLYPH : DONE_GLYPH} ${item.name}`).join(' · '),
   right: `done ${settled.filter(item => !item.isAbandoned).length}`,
   mark: 'done',
   step: '',

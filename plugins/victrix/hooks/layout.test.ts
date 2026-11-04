@@ -127,6 +127,46 @@ test('no plan: the box says so, the recent plans are offered, the footer stays',
   expect(isInDictionary(rows)).toBe(true)
 })
 
+// The owner's law (2026-11-05): a smaller view never holds more data or elements than a larger sibling, in width or in
+// height; views evolve, they never jump. Measured on element keys: a fold row (`…more`) stands for less, not more.
+const BIG = parsePlan(
+  [
+    '# A forty-step plan',
+    '## Done',
+    ...Array.from({ length: 12 }, (_, n) => `- [x] **Step ${n + 1}** — done`),
+    '## In Progress',
+    '- [ ] **Step 13** — live · facts: claude: the cache is warm · facts: data: the seed has rows · facts: claude: ids are dense · facts: code: prices in cents · verify: bun test',
+    '## Up Next',
+    ...Array.from({ length: 27 }, (_, n) => `- [ ] **Step ${n + 14}** — later`),
+  ].join('\n'),
+)
+const bigInput = (columns: number, rows: number) => ({ ...input(columns, rows), tree: BIG, spent: { ...spent, stepNow: 'Step 13', steps: { 'Step 13': spent.steps.Lens! } } })
+const elements = (rows: ReturnType<typeof layout>) => new Set(rows.map(one => one.key).filter(key => !key.endsWith(':more') && !key.startsWith('pad:') && !key.startsWith('gap:')))
+const isSubset = (small: Set<string>, large: Set<string>) => [...small].every(key => large.has(key))
+
+test('a narrower pane never shows an element a wider one lacks, at every height', () => {
+  for (const rows of [8, 12, 20, 30, 50]) {
+    const widths = [10, 12, 24, 30, 40, 50, 60, 100]
+    for (let index = 1; index < widths.length; index += 1) {
+      const small = elements(layout(bigInput(widths[index - 1]!, rows)))
+      const large = elements(layout(bigInput(widths[index]!, rows)))
+      expect([widths[index - 1], widths[index], rows, [...small].filter(key => !large.has(key))]).toEqual([widths[index - 1], widths[index], rows, []])
+      expect(isSubset(small, large)).toBe(true)
+    }
+  }
+})
+
+test('a shorter pane never shows an element a taller one lacks, at every width', () => {
+  for (const columns of [10, 24, 40, 50, 60]) {
+    const heights = [6, 8, 10, 12, 16, 20, 24, 30, 40, 50, 60]
+    for (let index = 1; index < heights.length; index += 1) {
+      const small = elements(layout(bigInput(columns, heights[index - 1]!)))
+      const large = elements(layout(bigInput(columns, heights[index]!)))
+      expect([columns, heights[index - 1], heights[index], [...small].filter(key => !large.has(key))]).toEqual([columns, heights[index - 1], heights[index], []])
+    }
+  }
+})
+
 test('a short pane keeps the live step and at least three doing rows, folding done steps into a count', () => {
   const rows = layout(input(40, 12))
   const drawn = text(rows)

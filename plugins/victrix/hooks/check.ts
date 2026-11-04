@@ -135,7 +135,12 @@ const INVOCATIONS: readonly (readonly string[])[] = [
   ['lake', 'test'],
   ['lean', '--version'],
 ]
-const CODE_FLAGS = /^(-c|-e|-p|-r|--eval|--print|--require|--import|--loader|--experimental-loader|-x|--exec|--run)$/
+// After the invocation, every further argument must be allowed by shape, never merely not forbidden: a denylist of
+// code-loading flags loses to `--eval=…`, getopt abbreviations (`--ev`), attached values (`-fMakefile`) and make's
+// `NAME=value` positionals. So: a flag must be one of a few harmless ones, exactly; anything else must be a plain
+// token (letters, digits, `. _ @ / -`, so no `=`, no space, no shell character) that resolves inside the repo.
+const SAFE_FLAGS: ReadonlySet<string> = new Set(['-v', '--verbose', '-q', '--quiet', '--bail', '-k', '-run', '--release'])
+const PLAIN_TOKEN = /^[\w.@/-]+$/
 const SHELLS: ReadonlySet<string> = new Set(['bash', 'sh'])
 // An interpreter may run a script, but only one under the script folders: the slow and fast versions of a differential live there.
 const INTERPRETERS: ReadonlySet<string> = new Set(['python', 'python3', 'node', 'bun', 'deno'])
@@ -143,14 +148,25 @@ const SCRIPT_DIRS = ['demo', 'test', 'tests'] as const
 
 const isUnderScriptDir = (dir: string, path: string) => SCRIPT_DIRS.some(sub => resolvePath(dir, path).startsWith(`${resolvePath(dir, sub)}/`))
 
-/** True when the command may run: a known test invocation with no code-loading flag, or a script under demo/, test/ or tests/ of `dir` (bare, or via a shell or an interpreter). */
+/** A token that names a path must stay under `dir`: no `..` climbing, no absolute path elsewhere. */
+const isPathInside = (dir: string, part: string): boolean => !part.includes('/') || resolvePath(dir, part).startsWith(`${resolvePath(dir, '.')}/`)
+
+/** One argument after the invocation: a harmless flag exactly, or a plain token inside the repo. */
+const isSafeExtra = (dir: string, part: string): boolean => (part.startsWith('-') ? SAFE_FLAGS.has(part) : PLAIN_TOKEN.test(part) && isPathInside(dir, part))
+
+/**
+ * True when the command may run: a known test invocation followed only by safe arguments, or a script under demo/,
+ * test/ or tests/ of `dir` (bare, or via a shell or an interpreter) followed only by safe arguments.
+ */
 export const isAllowed = (argv: readonly string[], dir: string): boolean => {
   const [head, script] = argv
   if (head === undefined) return false
-  if (argv.some(part => CODE_FLAGS.test(part))) return false
-  if (INVOCATIONS.some(known => known.every((word, index) => argv[index] === word))) return true
-  if (SHELLS.has(head) || INTERPRETERS.has(head)) return script !== undefined && !script.startsWith('-') && isUnderScriptDir(dir, script)
-  return head.includes('/') && isUnderScriptDir(dir, head)
+  const known = INVOCATIONS.find(words => words.every((word, index) => argv[index] === word))
+  if (known !== undefined) return argv.slice(known.length).every(part => isSafeExtra(dir, part))
+  if (SHELLS.has(head) || INTERPRETERS.has(head)) {
+    return script !== undefined && !script.startsWith('-') && PLAIN_TOKEN.test(script) && isUnderScriptDir(dir, script) && argv.slice(2).every(part => isSafeExtra(dir, part))
+  }
+  return head.includes('/') && PLAIN_TOKEN.test(head) && isUnderScriptDir(dir, head) && argv.slice(1).every(part => isSafeExtra(dir, part))
 }
 
 export const refusal = (head: string) => `check refused: ${head} is not on the allowlist (test invocations such as bun test, pytest, go test, cargo test, lake build; scripts under demo/ or test/)`
@@ -235,9 +251,9 @@ export const ledgerLine = (at: number, claim: Claim, english?: string): string =
     claim.status === 'broken'
       ? (claim.counterexample ?? 'a case fails')
       : claim.source === 'lean'
-        ? `lake build green${english === undefined ? '' : ` ⋅ English: ${english}`}`
+        ? `lake build green${english === undefined ? '' : ` · English: ${english}`}`
         : `ran ${claim.evidence?.cases ?? 1}`
-  return `${clock(at)} ${glyph} ${claim.says} ⋅ ${tail}`
+  return `${clock(at)} ${glyph} ${claim.says} · ${tail}`
 }
 
 /** The tool's answer to the model: the claim's label, then the tail; never a question back. */
@@ -350,7 +366,7 @@ async function runDifferential($: Dollar, input: CheckInput, dir: string): Promi
   const { list, failed } = await inputsOf($, input, dir)
   const missing = missingExtremes(list)
   const notes = [
-    ...(missing.length > 0 ? [`coverage: partial ⋅ missing: ${missing.join(', ')}`] : []),
+    ...(missing.length > 0 ? [`coverage: partial · missing: ${missing.join(', ')}`] : []),
     ...(list.length > CASES_CAP ? [`capped at ${CASES_CAP} of ${list.length} inputs`] : []),
   ]
   let cases = 0
@@ -367,7 +383,7 @@ async function runDifferential($: Dollar, input: CheckInput, dir: string): Promi
   const generate = input.inputs !== undefined && !Array.isArray(input.inputs) ? (input.inputs as { generate: readonly string[] }).generate : []
   const evidence: Evidence = {
     kind: 'differential',
-    command: `slow: ${slow.join(' ')} ⋅ fast: ${fast.join(' ')}`,
+    command: `slow: ${slow.join(' ')} · fast: ${fast.join(' ')}`,
     exitCode: mismatch === undefined && list.length > 0 ? 0 : 1,
     cases,
     ms: Date.now() - started,
@@ -486,7 +502,7 @@ async function runLean($: Dollar, input: CheckInput, dir: string, lakefile: stri
 
   const statement = theorem === undefined ? undefined : texts.map(({ text }) => statementOf(text, theorem)).find(found => found !== undefined)
   const back = statement === undefined ? { why: theorem === undefined ? 'no theorem named' : 'statement not found in the file' } : await backTranslate($, statement)
-  const englishLine = back.english !== undefined ? undefined : `English unconfirmed ⋅ ${back.why ?? 'no model available'}`
+  const englishLine = back.english !== undefined ? undefined : `English unconfirmed · ${back.why ?? 'no model available'}`
 
   // proved() takes the tail's last line as the counterexample, so the reason it fails comes last.
   const reason =
@@ -508,7 +524,7 @@ async function runLean($: Dollar, input: CheckInput, dir: string, lakefile: stri
   ].join('\n')
   const evidence: Evidence = {
     kind: 'lean',
-    command: theorem === undefined ? 'lake build' : `lake build ⋅ #print axioms ${theorem}`,
+    command: theorem === undefined ? 'lake build' : `lake build · #print axioms ${theorem}`,
     exitCode,
     ms: Date.now() - started,
     tail: lastLines(tail, TAIL_LINES),

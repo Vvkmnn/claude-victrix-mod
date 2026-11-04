@@ -185,6 +185,19 @@ declare module 'claude-code' {
       stepTokens: readonly number[]
       /** Context percent at the end of each turn, newest last, so the gauge shows the delta per turn. */
       ctxHistory: readonly number[]
+      /** The trust signals the evidence supports for the live step, worst first; the pane shows them in words. */
+      signals: readonly Signal[]
+      /** The one signal the line above the prompt carries until answered: a warning at once, a caution at the turn's end. */
+      alert: Signal | null
     }
   }
+}
+
+/** A trust signal (see hooks/signals.ts): what the evidence says about Claude's words, graded as a cockpit grades alerts. */
+export type Signal = {
+  readonly kind: 'unbacked' | 'contradicted' | 'unchecked' | 'repeating' | 'off-plan' | 'missing' | 'stale'
+  readonly level: 'advisory' | 'caution' | 'warning'
+  readonly words: string
+  /** Which side needs more: the maths (a fact, a check, a verify line) or Claude (its words, its path). */
+  readonly needs: 'maths' | 'claude'
 }
