@@ -14,8 +14,9 @@ export type Usage = {
 
 export type ActivityEvent =
   | { readonly kind: 'turn-start' }
-  | { readonly kind: 'call-start'; readonly text: string; readonly at?: number }
-  | { readonly kind: 'call-end'; readonly text: string; readonly isOk: boolean; readonly isDeclined?: boolean; readonly at?: number; readonly ms?: number }
+  /** A call began; `helper` names a subagent's loop (its Agent description), absent on the main loop. */
+  | { readonly kind: 'call-start'; readonly text: string; readonly at?: number; readonly helper?: string }
+  | { readonly kind: 'call-end'; readonly text: string; readonly isOk: boolean; readonly isDeclined?: boolean; readonly at?: number; readonly ms?: number; readonly helper?: string; readonly detail?: string }
   | { readonly kind: 'usage'; readonly usage: Usage }
   | { readonly kind: 'turn-end' }
   /** The plan's lit step changed: spend from now on lands on `name` (null when every step is done). */
@@ -57,6 +58,51 @@ export const describeCall = (tool: string, input: Readonly<Record<string, unknow
   return tool.startsWith('mcp__') ? tool.split('__').slice(1).join(' ') : tool.toLowerCase()
 }
 
+const lineCount = (text: string) => (text === '' ? 0 : text.split('\n').length)
+const counted = (count: number, word: string) => `${count} ${count === 1 ? word : `${word}s`}`
+const number = (input: Readonly<Record<string, unknown>>, key: string) => (typeof input[key] === 'number' ? (input[key] as number) : undefined)
+const resultText = (result: unknown): string => {
+  if (typeof result === 'string') return result
+  if (result && typeof result === 'object' && 'result' in result && typeof (result as { result: unknown }).result === 'string') return (result as { result: string }).result
+  return ''
+}
+
+/**
+ * The lowest level the engine gave for a finished call, for the person watching (owner, 2026-11-05): lines added and
+ * removed for an edit, lines written, the range read, the hits a search found, the exit code of a failed run.
+ * Nothing is estimated: a call the engine said nothing countable about gets no detail.
+ */
+export const describeResult = (tool: string, input: Readonly<Record<string, unknown>>, result: unknown): string | undefined => {
+  if (tool === 'Edit') {
+    const added = lineCount(field(input, 'new_string') ?? '')
+    const removed = lineCount(field(input, 'old_string') ?? '')
+    return `+${added} −${removed}`
+  }
+  if (tool === 'Write') return counted(lineCount(field(input, 'content') ?? ''), 'line')
+  if (tool === 'Read') {
+    const offset = number(input, 'offset')
+    const limit = number(input, 'limit')
+    if (offset !== undefined || limit !== undefined) {
+      const start = offset ?? 1
+      return limit !== undefined ? `${start}–${start + limit - 1}` : `from ${start}`
+    }
+    const lines = lineCount(resultText(result).trim())
+    return lines > 0 ? counted(lines, 'line') : undefined
+  }
+  if (tool === 'Grep' || tool === 'Glob') {
+    const text = resultText(result).trim()
+    const found = /^Found (\d+) (files?|matches?|lines?)/.exec(text)
+    if (found) return `${found[1]} ${found[2]}`
+    const lines = lineCount(text)
+    return lines > 0 ? counted(lines, tool === 'Glob' ? 'file' : 'hit') : 'nothing'
+  }
+  if (tool === 'Bash') {
+    const exit = /[Ee]xit code:? (\d+)/.exec(resultText(result))
+    return exit ? `exit ${exit[1]}` : undefined
+  }
+  return undefined
+}
+
 // Fresh tokens only: a cache read re-sends the whole context at a tenth of the price or less, so counting it would
 // show the context size, not what the step cost.
 const sum = (usage: Usage) => ({
@@ -88,8 +134,14 @@ export const reduceActivity = (state: Activity, event: ActivityEvent): Activity 
   switch (event.kind) {
     case 'turn-start':
       return { ...state, doing: 'thinking', turnIn: 0, turnOut: 0, said: state.saidBy === 'you' ? state.said : '' }
-    case 'call-start':
-      return spendOn({ ...state, doing: event.text }, spend => ({ ...spend, calls: spend.calls + 1 }))
+    case 'call-start': {
+      // A helper's call does not move the head row (that is the main loop's); it shows as a running line of its own
+      // until it ends. Every loop's call counts as effort on the step.
+      const counted = spendOn(state, spend => ({ ...spend, calls: spend.calls + 1 }))
+      if (event.helper === undefined) return { ...counted, doing: event.text }
+      const running: ActivityLine = { text: event.text, isOk: true, isRunning: true, helper: event.helper, at: event.at, step: state.stepNow ?? undefined }
+      return { ...counted, last: push(state.last, running) }
+    }
     case 'call-end': {
       const line: ActivityLine = {
         text: event.text,
@@ -98,10 +150,12 @@ export const reduceActivity = (state: Activity, event: ActivityEvent): Activity 
         at: event.at,
         ms: event.ms,
         step: state.stepNow ?? undefined,
-        said: state.said === '' ? undefined : firstSentence(state.said),
-        saidBy: state.said === '' ? undefined : state.saidBy,
+        ...(event.helper === undefined ? { said: state.said === '' ? undefined : firstSentence(state.said), saidBy: state.said === '' ? undefined : state.saidBy } : { helper: event.helper }),
+        ...(event.detail === undefined ? {} : { detail: event.detail }),
       }
-      const next = { ...state, doing: 'thinking', last: push(state.last, line), said: '', saidBy: 'claude' as const }
+      // A helper's line replaces its own running line; the main loop's head row goes back to thinking.
+      const kept = event.helper === undefined ? state.last : state.last.filter(one => !(one.isRunning && one.helper === event.helper && one.text === event.text))
+      const next = event.helper === undefined ? { ...state, doing: 'thinking', last: push(kept, line), said: '', saidBy: 'claude' as const } : { ...state, last: push(kept, line) }
       // A decline is the person's choice, not a failure of Claude's: it never counts against the step.
       return event.isOk || event.isDeclined ? next : spendOn(next, spend => ({ ...spend, fails: spend.fails + 1 }))
     }

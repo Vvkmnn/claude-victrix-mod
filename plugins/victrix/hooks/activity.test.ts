@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { EMPTY_ACTIVITY, LAST_KEPT, describeCall, formatTokens, reduceActivity, timeOn } from './activity'
+import { EMPTY_ACTIVITY, LAST_KEPT, describeCall, describeResult, formatTokens, reduceActivity, timeOn } from './activity'
 import type { ActivityEvent } from './activity'
 
 const run = (events: readonly ActivityEvent[]) => events.reduce(reduceActivity, EMPTY_ACTIVITY)
@@ -115,6 +115,44 @@ test('the reducer never mutates the state it is given', () => {
   reduceActivity(before, { kind: 'call-end', text: 'b', isOk: true })
 
   expect(JSON.stringify(before)).toBe(frozen)
+})
+
+test('describeResult gives the lowest level the engine had: lines added and removed, lines written, the range read, the hits, the exit code; nothing when it had none', () => {
+  expect(describeResult('Edit', { old_string: 'a', new_string: 'a\nb\nc' }, { result: 'ok' })).toBe('+3 −1')
+  expect(describeResult('Edit', { old_string: '', new_string: 'x' }, {})).toBe('+1 −0')
+  expect(describeResult('Write', { content: 'one\ntwo' }, {})).toBe('2 lines')
+  expect(describeResult('Read', { file_path: '/a.ts', offset: 92, limit: 44 }, {})).toBe('92–135')
+  expect(describeResult('Read', { file_path: '/a.ts', offset: 10 }, {})).toBe('from 10')
+  expect(describeResult('Read', { file_path: '/a.ts' }, { result: '1\tx\n2\ty\n3\tz' })).toBe('3 lines')
+  expect(describeResult('Read', { file_path: '/a.ts' }, { result: '' })).toBeUndefined()
+  expect(describeResult('Read', { file_path: '/a.ts' }, { result: '1\tx' })).toBe('1 line')
+  expect(describeResult('Write', { content: 'x' }, {})).toBe('1 line')
+  expect(describeResult('Grep', { pattern: 'x' }, { result: 'Found 4 files\na\nb\nc\nd' })).toBe('4 files')
+  expect(describeResult('Grep', { pattern: 'x' }, { result: 'a:1:x\nb:2:x' })).toBe('2 hits')
+  expect(describeResult('Grep', { pattern: 'x' }, { result: 'a:1:x' })).toBe('1 hit')
+  expect(describeResult('Grep', { pattern: 'x' }, { result: '' })).toBe('nothing')
+  expect(describeResult('Glob', { pattern: '*.ts' }, { result: '/a.ts\n/b.ts' })).toBe('2 files')
+  expect(describeResult('Bash', { command: 'bun test' }, { isError: true, result: 'Exit code 1\nboom' })).toBe('exit 1')
+  expect(describeResult('Bash', { command: 'bun test' }, { result: 'all good' })).toBeUndefined()
+  expect(describeResult('WebFetch', { url: 'https://x.y' }, { result: 'page' })).toBeUndefined()
+  expect(describeResult('Agent', { description: 'scan' }, { result: 'done' })).toBeUndefined()
+})
+
+test("a helper's call is a running line while it runs, then its own done line with its tag; the head row stays the main loop's", () => {
+  let state = reduceActivity(EMPTY_ACTIVITY, { kind: 'turn-start' })
+  state = reduceActivity(state, { kind: 'call-start', text: 'edit lens.tsx', at: 1000 })
+  state = reduceActivity(state, { kind: 'call-start', text: 'read layout.ts', at: 1100, helper: 'scan glyphs' })
+  expect(state.doing).toBe('edit lens.tsx')
+  expect(state.last[0]).toMatchObject({ text: 'read layout.ts', helper: 'scan glyphs', isRunning: true })
+  state = reduceActivity(state, { kind: 'call-end', text: 'read layout.ts', isOk: true, at: 1100, ms: 40, helper: 'scan glyphs', detail: '12 lines' })
+  expect(state.doing).toBe('edit lens.tsx')
+  expect(state.last.filter(one => one.isRunning)).toHaveLength(0)
+  expect(state.last[0]).toMatchObject({ text: 'read layout.ts', helper: 'scan glyphs', isOk: true, detail: '12 lines' })
+  expect(state.last[0]?.said).toBeUndefined()
+  state = reduceActivity(state, { kind: 'call-end', text: 'edit lens.tsx', isOk: true, at: 1000, ms: 300, detail: '+3 −1' })
+  expect(state.doing).toBe('thinking')
+  expect(state.last[0]).toMatchObject({ text: 'edit lens.tsx', detail: '+3 −1' })
+  expect(state.last[0]?.helper).toBeUndefined()
 })
 
 test('formatTokens reads at a glance', () => {

@@ -57,7 +57,7 @@ The pane asks for 27% of the terminal. The engine keeps a width you dragged over
 /plugin install victrix@claude-victrix-mod
 ```
 
-Then start Claude Code in any repo and enter plan mode (shift+tab). The lens opens by itself beside the chat, follows the plan file Claude writes, and keeps following it after plan mode as a narrow strip. No commands to learn: every control is a word you can click, and a vim key while the pane is held (`h` lists them).
+Then start Claude Code in any repo and enter plan mode (shift+tab). The lens opens by itself beside the chat, follows the plan file Claude writes, and keeps following it after plan mode as the same pane. No commands to learn: every control is a word you can click, and a vim key while the pane is held (`h` lists them).
 
 To develop against a checkout: `claude --plugin-dir ~/Projects/claude-victrix-mod/plugins/victrix` (hot reload on edit).
 
@@ -69,10 +69,10 @@ To develop against a checkout: `claude --plugin-dir ~/Projects/claude-victrix-mo
 - `a` **add a fact**: type it in the prompt; it lands under the step as a fact by you, assumed until a tool checks it.
 - `w` **wrong path**: Claude stops that branch, says why it chose it, and proposes another route.
 - `e` **explain**: the card: the line in English, the maths, what was proved (`status ≤ every premise`, `combine_le_premise`), the failing case, the because, what the step spent, what the label holds.
-- `c` **check**: run the live step's check.
+- `c` **check**: run the live step's check; it runs only when the live step has a `verify:` line.
+- `r` **right**: the English says what I meant; shown on a checked Lean claim's card only.
 - `h` **help**: this list.
 - `q` **hide** the pane.
-- `e` **explain**: the card: the line in English, the maths, what was proved (`status ≤ every premise`, `combine_le_premise`), the failing case, the because, what the step spent, what the label holds.
 
 A note is delivered at once when Claude is idle, or rides your next prompt while Claude works.
 

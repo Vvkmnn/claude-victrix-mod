@@ -4,7 +4,7 @@
 import { atom, read, update } from 'claude-code'
 import type { CoreEngineInterface, Register, RenderChildren, RenderInput } from 'claude-code'
 
-import type { Activity, Claim, Note, PlanView, Question, RecentPlan } from '../types'
+import type { Activity, Claim, Note, PlanView, Question, RecentPlan, Signal } from '../types'
 import { EMPTY_ACTIVITY, formatTokens, timeOn } from './activity'
 import * as draw from './draw'
 import { factsOf } from './fit'
@@ -31,6 +31,8 @@ const tick = atom({ plugin: 'victrix', key: 'tick' } as const, 0)
 const questions = atom({ plugin: 'victrix', key: 'questions' } as const, [] as readonly Question[])
 const changed = atom({ plugin: 'victrix', key: 'changed' } as const, [] as readonly string[])
 const openedCard = atom({ plugin: 'victrix', key: 'openedCard' } as const, null as string | null)
+const isPlanMode = atom({ plugin: 'victrix', key: 'isPlanMode' } as const, false)
+const signals = atom({ plugin: 'victrix', key: 'signals' } as const, [] as readonly Signal[])
 
 /**
  * The theme-key or colour each paint resolves to; `text` is the theme's own foreground. The maths and the face share
@@ -135,6 +137,9 @@ export const registerPane = (on: On) => {
       isWorking: working,
       recent: offered.map(pick => ({ title: pick.title, path: pick.path })),
       ledger: await read($, changed),
+      isPlanning: await read($, isPlanMode),
+      signals: await read($, signals),
+      // One read per draw; the layout never reads the clock itself.
       // A followed path that cannot be read is said in words, never hidden (the never-dead rule).
       ...(view && view.tree === null ? { problem: `cannot read the plan · ${view.path}` } : {}),
     })
@@ -175,7 +180,7 @@ const helpRows = (columns: number): CardLine[] => {
   const wrap = (text: string, paint: Paint = 'dim') => draw.wrap(text, Math.max(10, columns - 4)).map(part => line(`    ${part}`, paint))
   return [
     line('    -_-  Victrix', 'math', true),
-    ...wrap('The plan beside the chat: the bar is how much is done, the line down the left is the steps, green behind Claude, orange where Claude is, the bar under it is the calls of that step.'),
+    ...wrap('The plan beside the chat, drawn as one line: the snake is born at the right, wraps the face, and comes down the steps eating them; the orange head is Claude on the current task; proof is the maths under it; process is what Claude just did.'),
     line(''),
     line('    ✗ ⊑ △ ⊑ ◇ ⊑ ■ ⊑ ◆', 'math', true),
     ...wrap('broken, assumed, checked by you, checked by a tool, proved in the model. A claim climbs only on evidence.'),

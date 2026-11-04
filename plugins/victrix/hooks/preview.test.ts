@@ -4,7 +4,12 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { Engine, TestBody } from 'claude-code/testing'
 
-import { GLYPHS } from './layout'
+import type { Activity, Claim } from '../types'
+import { EMPTY_ACTIVITY } from './activity'
+import { GLYPHS, isInDictionary, layout, rowWidth } from './layout'
+import type { LayoutInput } from './layout'
+import { colourOf } from './pane'
+import { parsePlan } from './plan'
 import { renderAnsi, renderPlain } from './render'
 import type { Drawn } from './render'
 
@@ -222,4 +227,78 @@ test('preview: a forty-step plan quartered, 30 columns and 24 rows (a 110-column
   await liveSession($)
   const pane = await mountPane($, 30, 24)
   print('big-30', 30, (await pane.drawn()) as Drawn)
+})
+
+// The board, laid out directly (surface-free: only Text, Box and spans, nothing a terminal alone could draw), at the
+// moments of a small project and at the sizes of the forty-step plan.
+const drawBoard = (rows: ReturnType<typeof layout>): Drawn => ({
+  type: 'Box',
+  props: { flexDirection: 'column' },
+  children: rows.map(line =>
+    line.spans.length === 0
+      ? { type: 'Text', children: [' '] }
+      : {
+          type: 'Box',
+          props: { flexDirection: 'row' },
+          children: line.spans.map(part => ({ type: 'Text', props: { color: colourOf(part.paint), dimColor: part.paint === 'dim', bold: part.bold === true }, children: [part.text] })),
+        },
+  ),
+})
+
+const NOW = 1_700_000_000_000
+const board = (columns: number, rows: number, source: string | null, more: Partial<LayoutInput> = {}) => {
+  const tree = source === null ? null : parsePlan(source)
+  const rowsOut = layout({ columns, rows, tree, claims: [], spent: EMPTY_ACTIVITY, now: NOW, tick: 3, isCalling: false, isWorking: false, recent: [], ...more })
+  for (const line of rowsOut) expect(rowWidth(line)).toBeLessThanOrEqual(columns)
+  expect(rowsOut.length).toBeLessThanOrEqual(rows)
+  expect(isInDictionary(rowsOut)).toBe(true)
+  return drawBoard(rowsOut)
+}
+
+const LOGIN_STEPS = ['**Reproduce** — verify: bun test login', '**Fix the redirect** — facts: data: the session cookie is httpOnly', '**Test**', '**Ship**']
+
+/** The login plan with `done` steps ticked, the next one in progress, the rest up next. */
+const login = (done: number) =>
+  [
+    '# Fix the login redirect',
+    '## Done',
+    ...LOGIN_STEPS.slice(0, done).map(step => `- [x] ${step}`),
+    '## In Progress',
+    ...LOGIN_STEPS.slice(done, done + 1).map(step => `- [ ] ${step}`),
+    '## Up Next',
+    ...LOGIN_STEPS.slice(done + 1).map(step => `- [ ] ${step}`),
+  ].join('\n')
+
+const worked: Activity = {
+  ...EMPTY_ACTIVITY,
+  doing: 'edit login.ts',
+  stepNow: 'Fix the redirect',
+  tokensIn: 40_000,
+  tokensOut: 8_000,
+  steps: { Reproduce: { calls: 9, fails: 1, tokens: 12_000, enteredAt: 0, ms: 7 * 60_000 }, 'Fix the redirect': { calls: 14, fails: 1, tokens: 31_000, enteredAt: NOW - 27 * 60_000, ms: 0 } },
+  last: [
+    { text: 'edit login.ts', isOk: true, at: NOW - 1000 },
+    { text: 'run bun test login', isOk: false, at: NOW - 2000 },
+    { text: 'run bun test login', isOk: false, at: NOW - 3000 },
+    { text: 'exitplanmode', isOk: false, isDeclined: true, at: NOW - 4000 },
+  ],
+}
+
+const loginClaims: Claim[] = [{ step: 'Fix the redirect', says: 'the session cookie is httpOnly', status: 'open', source: 'data', at: NOW }]
+
+test('preview: the board at five moments of a small project, 44 columns by 28 rows', () => {
+  print('board-none-44', 44, board(44, 28, null, { recent: [{ title: 'Discount codes for the shop', path: '/p/discount.md' }] }))
+  print('board-planning-44', 44, board(44, 28, null, { isPlanning: true, isWorking: true, isCalling: true, spent: { ...EMPTY_ACTIVITY, doing: 'read plan.ts', last: [{ text: 'read plan.ts', isOk: true, at: NOW - 90_000 }, { text: 'read lens.tsx', isOk: true, at: NOW - 60_000 }, { text: 'read tape.tsx', isOk: true, at: NOW - 20_000 }] } }))
+  print('board-first-44', 44, board(44, 28, login(0), { isWorking: true, spent: { ...EMPTY_ACTIVITY, doing: 'thinking', steps: { Reproduce: { calls: 2, fails: 0, tokens: 1_000, enteredAt: NOW - 40_000, ms: 0 } } } }))
+  print('board-mid-44', 44, board(44, 28, login(1), { claims: loginClaims, isWorking: true, isCalling: true, spent: worked }))
+  print('board-landing-44', 44, board(44, 28, login(4), { spent: { ...worked, doing: null, steps: { ...worked.steps, Test: { calls: 5, fails: 0, tokens: 20_000, enteredAt: 0, ms: 3 * 60_000 }, Ship: { calls: 3, fails: 0, tokens: 9_000, enteredAt: 0, ms: 60_000 } } } }))
+})
+
+test('preview: the forty-step plan on the board at 50x50, 24x50, 10x24, 80x40 and the quarter screen 44x12', () => {
+  const busy = { claims: [] as Claim[], isWorking: true, isCalling: true, spent: { ...worked, stepNow: 'Step 13', steps: { 'Step 13': worked.steps['Fix the redirect']! } } }
+  print('board-big-50', 50, board(50, 50, BIG_PLAN, busy))
+  print('board-big-24', 24, board(24, 50, BIG_PLAN, busy))
+  print('board-big-10', 10, board(10, 24, BIG_PLAN, busy))
+  print('board-big-80', 80, board(80, 40, BIG_PLAN, busy))
+  print('board-big-44', 44, board(44, 12, BIG_PLAN, busy))
 })

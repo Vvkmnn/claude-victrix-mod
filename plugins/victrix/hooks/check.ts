@@ -148,8 +148,13 @@ const SCRIPT_DIRS = ['demo', 'test', 'tests'] as const
 
 const isUnderScriptDir = (dir: string, path: string) => SCRIPT_DIRS.some(sub => resolvePath(dir, path).startsWith(`${resolvePath(dir, sub)}/`))
 
-/** A token that names a path must stay under `dir`: no `..` climbing, no absolute path elsewhere. */
-const isPathInside = (dir: string, part: string): boolean => !part.includes('/') || resolvePath(dir, part).startsWith(`${resolvePath(dir, '.')}/`)
+/** Every token is resolved as a path and must be the repo itself or sit under it: no `..` segment anywhere, no absolute path elsewhere. */
+const isPathInside = (dir: string, part: string): boolean => {
+  if (part.split('/').includes('..')) return false
+  const root = resolvePath(dir, '.')
+  const resolved = resolvePath(dir, part)
+  return resolved === root || resolved.startsWith(`${root}/`)
+}
 
 /** One argument after the invocation: a harmless flag exactly, or a plain token inside the repo. */
 const isSafeExtra = (dir: string, part: string): boolean => (part.startsWith('-') ? SAFE_FLAGS.has(part) : PLAIN_TOKEN.test(part) && isPathInside(dir, part))

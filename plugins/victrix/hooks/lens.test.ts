@@ -224,22 +224,20 @@ for (const surface of SURFACES) {
     const pane = await mountPane($)
     const texts = await textsOf(pane)
     const drawn = texts.join('')
-    // The hub: one face, the plan bar out of its right wall, the count with its unit.
-    expect(texts).toContain('-_-')
-    expect(drawn).toContain('│ -_- ┝')
-    expect(drawn).toContain('1/3 steps')
-    expect(drawn).toContain('╰──┰──╯')
-    // The spine: green beside the done step, orange beside the live one, with its clock in the time column.
-    expect(drawn).toMatch(/┃\s+\d+s\s+▶ Lens/)
-    expect(drawn).toContain('✓ Crab')
-    expect(drawn).toContain('○ Gaits')
-    // Proof: the meet in notation, the fact with its glyph and one word, the check with its verify line.
+    // The hub: the snake's corner at the top left, its tail along the top row, the plan's name and count beside the spine.
+    expect(drawn).toContain('┏━')
+    expect(drawn).toContain('1/3 steps · ')
+    // The snake comes down the steps: the done step ticked, the live one with its clock, the tasks ahead as food.
+    expect(drawn).toMatch(/┃ \[ \] Lens\s+· \d+s/)
+    expect(drawn).toContain('[✓] Crab')
+    expect(drawn).toContain('▫ [ ] Gaits')
+    // Proof: the meet in notation, the fact in words then its rung, the check with its verify line.
     expect(drawn).toContain('Lens ⊑ ⊓ {')
-    expect(drawn).toContain('△ prices are in cents')
-    expect(drawn).toContain('unchecked')
+    expect(drawn).toContain('prices are in cents')
+    expect(drawn).toContain('Claude assumes this; nobody checked it')
     expect(drawn).toContain('⊢ one screen')
     expect(drawn).toContain('proof')
-    expect(drawn).toContain('doing')
+    expect(drawn).toContain('process')
     // No zone rules, no gauges, no tree glyphs, nothing of the old labels.
     expect(drawn).not.toContain('─ now ')
     expect(drawn).not.toContain('gauges')
@@ -291,7 +289,7 @@ for (const surface of SURFACES) {
     await $.prompt.attachment(planNote(`${PLANS}/ghost-not-written-yet.md`))
     const pane = await mountPane($)
     const drawn = await joined(pane)
-    expect(drawn).toContain('▶ Lens')
+    expect(drawn).toContain('[ ] Lens')
     expect(drawn).not.toContain('cannot read the plan')
     expect(drawn).not.toContain('step removed')
     expect(world.read.filter(path => path.endsWith('ghost-not-written-yet.md')).length).toBeGreaterThan(0)
@@ -420,10 +418,35 @@ for (const surface of SURFACES) {
     await settle()
     const pane = await mountPane($)
     expect(await joined(pane)).toContain('read cart.ts')
-    expect(await textsOf(pane)).toContain('-_-')
+    expect((await textsOf(pane)).join('')).toContain('┏━')
     held.open()
     await call
+    // Once it ends the head row goes back to thinking and the read stays as the last action (owner: the log shows
+    // anything Claude is doing for the plan, reads included).
+    expect(await joined(pane)).toContain('thinking')
     expect(await joined(pane)).toContain('✓ read cart.ts')
+  })
+
+  test(`${surface}: a helper's calls reach the log at engine speed behind the helper's description, running then done, and never move the head row`, async ($, on) => {
+    const held = gate()
+    on('tool.call', { tool: 'Read' }, async () => { await held.until; return { result: '1\tx\n2\ty' } as never })
+    on('agent.list', async () => ({ value: [{ id: 'a1', description: 'scan the glyph dictionary', status: 'running' }] }) as never)
+    beneath(on, { files: { [PATH]: PLAN } })
+    await $.session.start(START)
+    await $.prompt.attachment(planNote(PATH))
+    await $.turn.start({ turnId: 'turn-1', prompt: 'go' } as never)
+    const call = $.tool.call({ tool: 'Read', tool_use_id: 't1', file_path: '/repo/src/layout.ts', agentId: 'a1' } as never)
+    await settle()
+    const pane = await mountPane($)
+    const during = await joined(pane)
+    // The tag is the Agent call's description, cut to 24 cells.
+    expect(during).toContain('scan the glyph dictiona… · read layout.ts')
+    expect(during).toContain('thinking')
+    held.open()
+    await call
+    const after = await joined(pane)
+    expect(after).toMatch(/✓ scan the glyph dictiona… · read layout\.ts\s+· 2 lines/)
+    expect(after).toContain('thinking')
   })
 
   test(`${surface}: a failed call is red in doing and counts against the step; a declined one is dim and counts for nothing`, async ($, on) => {
@@ -440,7 +463,7 @@ for (const surface of SURFACES) {
     const declined = texts.find(text => text.text.includes('declined by you'))
     expect(declined?.props.color).toBeUndefined()
     expect(declined?.props.dimColor).toBe(true)
-    expect(await joined(pane)).toContain('1 failed')
+    expect(await joined(pane)).toContain('✗')
   })
 
   // Steering
@@ -485,7 +508,7 @@ for (const surface of SURFACES) {
     const pane = await mountPane($)
     await pane.press({ key: 'doubt' })
     await $.turn.start({ turnId: 'turn-2', prompt: 'go' } as never)
-    await $.tool.call({ tool: 'Read', tool_use_id: 'r1', file_path: '/repo/src/a.ts' } as never)
+    await $.tool.call({ tool: 'Edit', tool_use_id: 'r1', file_path: '/repo/src/a.ts', old_string: 'a', new_string: 'b' } as never)
     expect(await joined(pane)).toContain('you said: doubt · Lens')
   })
 
@@ -562,7 +585,7 @@ for (const surface of SURFACES) {
     expect(texts.some(text => text.includes('because') && text.includes('plans are hard to follow'))).toBe(true)
     expect(texts.some(text => text.includes('∴'))).toBe(true)
     await pane.press({ key: 'close' })
-    expect(await joined(pane)).toContain('▶ Lens')
+    expect(await joined(pane)).toContain('[ ] Lens')
   })
 
   test(`${surface}: the ? popup names it once, teaches the ladder and the keys, and nothing else on screen names it`, async ($, on) => {
@@ -594,12 +617,12 @@ for (const surface of SURFACES) {
     const pane = await mountPane($)
     // The question is the ribbon's, above the prompt, with the fewest words; the pane never asks.
     const ribbon = await mountBand($)
-    expect(await joined(ribbon)).toContain('assumes prices are in cents')
-    expect(await joined(pane)).not.toContain('assumes prices')
+    expect(await joined(ribbon)).toContain('Claude assumed · prices are in cents · true?')
+    expect(await joined(pane)).not.toContain('Claude assumed · prices')
     await ribbon.press({ key: 't:2' })
     expect(world.submitted[0]?.text).toContain('DOUBT on step "Lens"')
     expect(world.store[`victrix.asked:${CWD}`]).toEqual(['feel|Lens|prices are in cents'])
-    expect(await joined(ribbon)).not.toContain('assumes prices')
+    expect(await joined(ribbon)).not.toContain('Claude assumed · prices')
     await pane.press({ key: 'proof:fact:0' })
     expect(await joined(pane)).toContain('you doubted it · re-check pending')
   })
@@ -635,7 +658,7 @@ for (const surface of SURFACES) {
     const texts = await textsOf(band)
     expect(texts).toContain('[-_-]')
     expect(texts.some(text => /^▶ Lens \d+s$/.test(text))).toBe(true)
-    expect(texts).toContain('assumes prices are in cents')
+    expect(texts).toContain('Claude assumed · prices are in cents · true?')
     expect(await joined(band)).toContain('because plans are hard to follow')
     const rows = await rowsOf(band, BAND_PROPS.bodyColumns)
     expect(rows.length).toBe(2)

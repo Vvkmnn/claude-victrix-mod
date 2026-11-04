@@ -31,27 +31,35 @@ const text = (rows: ReturnType<typeof layout>) => rows.map(one => one.spans.map(
 const drawn = (claims: Claim[], columns = 50, rows = 30, verify = false) => text(layout(input(claims, columns, rows, verify)))
 const test_ = (command: string, more: Partial<Claim> = {}) => fact('checked', 'tool', { evidence: { kind: 'test', command, exitCode: 0, ms: 3000, tail: '' }, ...more })
 
-test('an open claim you made reads "you said so", and saying is not a rung', () => {
+// Every fact is two lines: plain English above (who said it, whether anything checked it), the notation below (the
+// glyph, the claim, the evidence after ` · ` when there is any).
+test('an open claim you made reads "you said so" above the claim, and saying is not a rung', () => {
   const out = drawn([fact('open', 'you')])
-  expect(out).toContain('△ x is int · you said so')
+  expect(out).toContain('you said so; nothing has checked it')
+  expect(out).toContain('△ x is int')
   expect(out).not.toContain('◇')
 })
 
-test('an open claim you doubted reads "you doubted it"', () => {
-  expect(drawn([fact('open', 'doubt')])).toContain('△ x is int · you doubted it')
+test('an open claim you doubted says so', () => {
+  expect(drawn([fact('open', 'doubt')])).toContain('you doubted this; nothing has checked it')
 })
 
-test('an open claim from Claude or the data reads "unchecked"', () => {
-  expect(drawn([fact('open', 'claude')])).toContain('△ x is int · unchecked')
-  expect(drawn([fact('open', 'data')])).toContain('△ x is int · unchecked')
+test('an open claim from Claude or the data says who said it and that nothing checked it', () => {
+  expect(drawn([fact('open', 'claude')])).toContain('Claude assumes this; nobody checked it')
+  expect(drawn([fact('open', 'data')])).toContain('seen in the data; no test has checked it')
+  expect(drawn([fact('open', 'data')])).toContain('△ x is int')
 })
 
-test('a checked claim names the command that checked it', () => {
-  expect(drawn([test_('bun test cart.spec.ts')])).toContain('■ x is int · ⊢ bun test')
+test('a checked claim names the command that checked it after the claim', () => {
+  const out = drawn([test_('bun test cart.spec.ts')])
+  expect(out).toContain('a test checked this')
+  expect(out).toContain('■ x is int · ⊢ bun test')
 })
 
 test('a checked claim whose files moved says stale', () => {
-  expect(drawn([test_('bun test cart.spec.ts', { stale: true })])).toContain('■ x is int · ⊢ bun test · stale')
+  const out = drawn([test_('bun test cart.spec.ts', { stale: true })])
+  expect(out).toContain('the files moved since')
+  expect(out).toContain('■ x is int · ⊢ bun test · stale')
 })
 
 test('a checked claim with an empty command reads "checked"', () => {
@@ -61,11 +69,12 @@ test('a checked claim with an empty command reads "checked"', () => {
 test('a proved claim names its theorem', () => {
   const proved = fact('proved', 'lean', { evidence: { kind: 'lean', command: 'lake build', exitCode: 0, ms: 900, tail: '', theorem: 'feedPlan_eq' } })
   expect(drawn([proved])).toContain('◆ x is int · ⊢ feedPlan_eq')
+  expect(drawn([proved])).toContain('proved in the model')
 })
 
 test('a proved claim whose files moved says stale after the theorem', () => {
   const proved = fact('proved', 'lean', { stale: true, evidence: { kind: 'lean', command: 'lake build', exitCode: 0, ms: 900, tail: '', theorem: 'feedPlan_eq' } })
-  expect(drawn([proved])).toContain('· ⊢ feedPlan_eq · stale')
+  expect(drawn([proved])).toContain('◆ x is int · ⊢ feedPlan_eq · stale')
 })
 
 test('a proved claim without a theorem reads "proved"', () => {
@@ -73,19 +82,22 @@ test('a proved claim without a theorem reads "proved"', () => {
 })
 
 test('a broken claim carries its counterexample', () => {
-  expect(drawn([fact('broken', 'tool', { counterexample: 'SAVE50+SAVE60' })])).toContain('✗ x is int · broken: SAVE50+SAVE60')
+  const out = drawn([fact('broken', 'tool', { counterexample: 'SAVE50+SAVE60' })])
+  expect(out).toContain('a case breaks this: SAVE50+SAVE60')
+  expect(out).toContain('✗ x is int · broken: SAVE50+SAVE60')
 })
 
 test('a broken claim without a counterexample reads "broken"', () => {
   expect(drawn([fact('broken', 'tool')])).toContain('✗ x is int · broken')
 })
 
-test('a claim being checked reads "checking"', () => {
-  expect(drawn([fact('open', 'claude', { isChecking: true })])).toContain('· checking')
+test('a claim being checked says so in English', () => {
+  expect(drawn([fact('open', 'claude', { isChecking: true })])).toContain('a check is running on this now')
 })
 
-test('the check row before any run reads "not run" and names the key', () => {
-  expect(drawn([], 50, 30, true)).toContain('⊢ bun test · not run · press c')
+test('the check unit before any run says it has not run and names the key', () => {
+  expect(drawn([], 50, 30, true)).toContain('⊢ bun test · c')
+  expect(drawn([], 50, 30, true)).toContain("the step's test has not run yet")
 })
 
 test('the check row after a passing run reads "passed" with the time', () => {
@@ -103,13 +115,14 @@ test('the check row after a failure with no evidence reads "failed"', () => {
   expect(drawn([ran], 50, 30, true)).toContain('⊢ bun test · ✗ failed')
 })
 
-test('a live step with no facts and no check says so, and pressing it opens the step', () => {
-  const wide = layout(input([], 50, 30)).find(one => one.key === 'proof:none')
-  expect(wide).toBeDefined()
-  expect(text([wide!])).toContain('nothing assumed or checked yet')
-  expect(wide!.press).toEqual({ kind: 'step', step: 'Lens' })
-  const narrow = layout(input([], 30, 30)).find(one => one.key === 'proof:none')
-  expect(text([narrow!])).toContain('no facts, no check')
+test('a live step with no facts and no check draws no proof section; with a check and no facts the meet says the step rests on nothing', () => {
+  expect(layout(input([], 50, 30)).some(one => one.key.startsWith('proof:'))).toBe(false)
+  const rows = layout(input([], 50, 30, true))
+  const en = rows.find(one => one.key === 'proof:meet:en')
+  expect(text([en!])).toContain('no facts yet; the step rests on nothing')
+  expect(text([rows.find(one => one.key === 'proof:meet')!])).toContain('⊓ ∅ = △')
+  expect(rows.find(one => one.key === 'proof:meet')!.press).toEqual({ kind: 'step', step: 'Lens' })
+  expect(layout(input([], 30, 30, true)).some(one => one.key === 'proof:meet:en')).toBe(false)
 })
 
 test('at 24 columns the words drop and the meet still ends in a status glyph', () => {
@@ -117,7 +130,8 @@ test('at 24 columns the words drop and the meet still ends in a status glyph', (
   for (const one of rows.filter(r => r.key.startsWith('proof:fact'))) expect(text([one])).not.toContain(' · ')
   const meet = rows.find(one => one.key === 'proof:meet')
   expect(meet).toBeDefined()
-  expect(text([meet!])).toMatch(/= [✗△■◆]\s*$/)
+  // The row ends with the hairpin's edge after the glyph: the faint path dot, the body or the head.
+  expect(text([meet!])).toMatch(/= [✗△■◆]\s*[·┃◘]?$/)
 })
 
 test('statusWord of an open claim you made is "you said so", never "you"', () => {

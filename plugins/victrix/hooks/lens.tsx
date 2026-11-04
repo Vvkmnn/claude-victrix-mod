@@ -4,7 +4,7 @@ import { atom, read, update } from 'claude-code'
 import type { CoreEngineInterface, Register, RenderChildren } from 'claude-code'
 
 import type { Activity, Claim, Note, NoteKind, PlanItem, PlanTree, PlanView, Question, RecentPlan, Status } from '../types'
-import { EMPTY_ACTIVITY, describeCall, formatTokens, reduceActivity, timeOn } from './activity'
+import { EMPTY_ACTIVITY, describeCall, describeResult, formatTokens, reduceActivity, timeOn } from './activity'
 import type { ActivityEvent } from './activity'
 import * as draw from './draw'
 import { runVerify } from './check'
@@ -15,6 +15,8 @@ import type { Form, FormChoice } from './form'
 import { GLYPH, MEANING, label as claimLabel, proved, sameClaim, stepStatus, weakest } from './lattice'
 import { VERBS, appendLog, deliveryText, describeNote, logLine } from './notes'
 import { itemNamed, nowItem, parsePlan } from './plan'
+import { isInhibited, signalsOf, worst } from './signals'
+import type { Signal } from './signals'
 
 type On = Parameters<Register>[0]
 export type Dollar = Pick<CoreEngineInterface, 'state' | 'fs' | 'store' | 'ui' | 'env' | 'prompt' | 'clock' | 'session' | 'process' | 'model'>
@@ -48,8 +50,15 @@ const surface = atom({ plugin: 'victrix', key: 'surface' } as const, 'terminal' 
 const contextPercent = atom({ plugin: 'victrix', key: 'contextPercent' } as const, 0)
 const stepTokens = atom({ plugin: 'victrix', key: 'stepTokens' } as const, [] as readonly number[])
 const ctxHistory = atom({ plugin: 'victrix', key: 'ctxHistory' } as const, [] as readonly number[])
+const signals = atom({ plugin: 'victrix', key: 'signals' } as const, [] as readonly Signal[])
+const alert = atom({ plugin: 'victrix', key: 'alert' } as const, null as Signal | null)
 const RECENT_KEPT = 3
 const CHANGED_KEPT = 40
+// The turn's start and the last verb press, for the signals: which calls are this turn's, and the inhibit window after a
+// press. Module variables: session-only, reset on reload, never read in a draw.
+let turnStartedAt = 0
+let lastVerbAt = 0
+const notified = new Set<string>()
 // The spinner's tick: the one declared exception to the ≤ 2 Hz motion rule, alive only while a call runs on the terminal.
 const TICK_MS = 125
 
@@ -64,6 +73,25 @@ const COLUMNS_KEY = 'victrix.columns'
 
 // Plan files live as <anything>/.claude/plans/<name>.md; their archives are history, not the plan.
 const isPlanFile = (path: string) => /\/\.claude\/plans\/[^/]+\.md$/.test(path) && !path.includes('.archive-')
+
+// A helper's tag for the log: the Agent call's own description of it, from the engine's roster, remembered per
+// loop so the roster is read once; `helper` when the roster cannot be read or has no entry.
+const helperTags = new Map<string, string>()
+async function helperTag($: CoreEngineInterface, agentId: string): Promise<string> {
+  const known = helperTags.get(agentId)
+  if (known !== undefined) return known
+  let tag = 'helper'
+  try {
+    const roster = await $.agent.list()
+    const entry = roster.find(one => one.id === agentId)
+    const words = entry?.description?.replace(/\s+/g, ' ').trim()
+    if (words) tag = words.length > 24 ? `${words.slice(0, 23)}…` : words
+  } catch {
+    // The roster is a courtesy: a helper without one is still a helper.
+  }
+  helperTags.set(agentId, tag)
+  return tag
+}
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
@@ -334,7 +362,68 @@ async function deliverNotes($: Dollar) {
 }
 
 // A pressed verb: logged at once, delivered at Claude's next step, told to the person in one toast.
+/**
+ * The trust signals, recomputed after every call and at the turn's end from what the mod holds: this turn's calls and
+ * what Claude said before them, the live step's calls so far, its claims, its verify line, the open options and the
+ * unsure answers. The pane shows them all in words; the line above the prompt takes only the worst, a warning at once,
+ * a caution at the turn's end, and neither while the person types, a dialog is up, or a verb was pressed moments ago.
+ */
+async function refreshSignals($: Dollar, moment: 'call' | 'turn-end') {
+  const view = await read($, plan)
+  const tree = view?.tree ?? null
+  const live = tree ? nowItem(tree) : undefined
+  if (!live) {
+    await update($, signals, () => [])
+    return
+  }
+  const spent = await read($, activity)
+  const turnCalls = spent.last.filter(line => (line.at ?? 0) >= turnStartedAt)
+  const spoken = [...turnCalls.filter(line => line.saidBy !== 'you' && line.said).map(line => line.said ?? ''), ...(spent.saidBy === 'claude' && spent.said ? [spent.said] : [])]
+  const pending = await read($, questions)
+  const ledger = await read($, changed)
+  const found = signalsOf({
+    spoken,
+    calls: turnCalls,
+    stepCalls: spent.last.filter(line => line.step === live.name),
+    claims: factsOf(live, await read($, claims)),
+    hasJudge: live.judge !== '',
+    openOptions: pending.filter(question => question.kind === 'build').length,
+    unsure: ledger.filter(line => line.includes('not sure about ·')).length,
+    // Off-plan turns are U5's; until it counts them the signal cannot fire.
+    offPlanTurns: 0,
+  })
+  await update($, signals, () => found)
+  const top = worst(found)
+  const candidate = top && top.level !== 'advisory' && (top.level === 'warning' || moment === 'turn-end') ? top : undefined
+  if (candidate === undefined) return
+  const { text } = await $.prompt.read()
+  const busy = { isTyping: text.trim() !== '', isDialogUp: await read($, isDialogUp), msSinceVerb: Date.now() - lastVerbAt }
+  if (isInhibited(candidate, busy)) return
+  await update($, alert, () => candidate)
+  if (candidate.level === 'warning' && !notified.has(candidate.words)) {
+    notified.add(candidate.words)
+    await $.ui.notify(candidate.words, { title: 'victrix' }).then(undefined, () => undefined)
+  }
+}
+
+/** The person answers the line: run the step's check, send Claude to find the evidence, or say they are not sure; the line goes either way. */
+export async function answerAlert($: Dollar, signal: Signal, answer: 'run' | 'ask' | 'unsure') {
+  await update($, alert, () => null)
+  const view = await read($, plan)
+  const live = view?.tree ? nowItem(view.tree) : undefined
+  if (answer === 'run') {
+    if (live) await verifyStep($, live)
+    return
+  }
+  if (answer === 'ask') {
+    if (live) await pressVerb($, 'doubt', live.name, `${signal.words} · find the evidence yourself, or say what you need from me`)
+    return
+  }
+  await noteChange($, `not sure about · ${signal.words}`)
+}
+
 export async function pressVerb($: Dollar, kind: NoteKind, step: string, says?: string) {
+  lastVerbAt = Date.now()
   if (kind === 'add') {
     await update($, pendingAdd, () => step)
     $.ui.toast(`add a fact · ${step}: type it in the prompt; Claude reads it at its next step`)
@@ -612,9 +701,13 @@ export const registerLens = (on: On, motion = true, review = true) => {
 
   on('turn.start', async ($, e, next) => {
     if (e.agentId === undefined) {
+      turnStartedAt = Date.now()
       await update($, isWorking, () => true)
       await record($, { kind: 'turn-start' })
       await startTicker($, SLOW_MS)
+      // A caution from the last turn has had its moment; a warning stays until answered (a dismissed caution keeps
+      // its status visible in the block, the cockpit's rule).
+      await update($, alert, current => (current !== null && current.level !== 'warning' ? null : current))
     }
     return next(e)
   })
@@ -640,6 +733,7 @@ export const registerLens = (on: On, motion = true, review = true) => {
       await deliverNotes($)
       await sendReview($)
       await checkDrift($)
+      await refreshSignals($, 'turn-end')
     }
     return next(e)
   })
@@ -665,10 +759,11 @@ export const registerLens = (on: On, motion = true, review = true) => {
     const text = describeCall(e.tool, input)
     const isDialog = isMain && (e.tool === 'ExitPlanMode' || e.tool === 'AskUserQuestion')
     const startedAt = Date.now()
-    if (isMain) {
-      await record($, { kind: 'call-start', text, at: startedAt })
-      await startTicker($, TICK_MS)
-    }
+    // Every loop's calls reach the log at engine speed (owner: "let the process log move at AI speed", helpers too);
+    // a helper's carry its Agent description as a tag. Only the main loop drives the head row and the ticker.
+    const helper = isMain ? undefined : await helperTag($, e.agentId!)
+    await record($, { kind: 'call-start', text, at: startedAt, ...(helper === undefined ? {} : { helper }) })
+    if (isMain) await startTicker($, TICK_MS)
     if (isDialog) {
       const askedNow = Array.isArray(input.questions) ? input.questions.map(q => (q && typeof q === 'object' && typeof (q as { question?: unknown }).question === 'string' ? (q as { question: string }).question : '')).filter(Boolean) : []
       await update($, asking, () => (e.tool === 'ExitPlanMode' ? ['the plan is up for your approval'] : askedNow))
@@ -679,10 +774,12 @@ export const registerLens = (on: On, motion = true, review = true) => {
     // A decline (the person's, or the permission system's) is not a failure of Claude's: logged as a decline, dim.
     const isDeclined = result.deny !== undefined
     const isOk = !isDeclined && result.isError !== true
+    const detail = isDeclined ? undefined : describeResult(e.tool, input, result)
+    await record($, { kind: 'call-end', text, isOk, ...(isDeclined ? { isDeclined: true } : {}), at: startedAt, ms: Date.now() - startedAt, ...(helper === undefined ? {} : { helper }), ...(detail === undefined ? {} : { detail }) })
     if (isMain) {
-      await record($, { kind: 'call-end', text, isOk, ...(isDeclined ? { isDeclined: true } : {}), at: startedAt, ms: Date.now() - startedAt })
       // Back to the slow tick between calls: the turn is still running.
       await startTicker($, SLOW_MS)
+      await refreshSignals($, 'call')
     }
     if (isDialog) {
       await update($, asking, () => [])

@@ -94,6 +94,12 @@ export type ActivityLine = {
   readonly said?: string
   /** Who said `said`: Claude's thinking words, or the person's verb delivered just before the call. */
   readonly saidBy?: 'claude' | 'you'
+  /** The lowest level the engine gave for the call: lines added and removed, the range read, the hits, the exit code. */
+  readonly detail?: string
+  /** A helper's call: the Agent call's own description of the helper, drawn as a tag before the call. */
+  readonly helper?: string
+  /** A helper's call still running: drawn in Claude's colour with a hollow dot, replaced when it ends. */
+  readonly isRunning?: boolean
 }
 
 /** What one plan step cost so far: calls, failures, tokens, and the time Claude has been on it. */

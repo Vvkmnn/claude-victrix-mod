@@ -3,13 +3,13 @@
 import { atom, read, update } from 'claude-code'
 import type { CoreEngineInterface, Register, RenderInput } from 'claude-code'
 
-import type { Activity, Claim, Note, PlanView, Question, RecentPlan } from '../types'
+import type { Activity, Claim, Note, PlanView, Question, RecentPlan, Signal } from '../types'
 import { EMPTY_ACTIVITY, timeOn } from './activity'
 import { describeNote } from './notes'
 import * as draw from './draw'
 import type { FormChoice } from './form'
 import { LIVE_COLOUR, shortClock } from './layout'
-import { answerQuestion } from './lens'
+import { answerAlert, answerQuestion } from './lens'
 import { nowItem } from './plan'
 
 type On = Parameters<Register>[0]
@@ -36,6 +36,7 @@ const questions = atom({ plugin: 'victrix', key: 'questions' } as const, [] as r
 const changed = atom({ plugin: 'victrix', key: 'changed' } as const, [] as readonly string[])
 const openedCard = atom({ plugin: 'victrix', key: 'openedCard' } as const, null as string | null)
 const surface = atom({ plugin: 'victrix', key: 'surface' } as const, 'terminal' as string)
+const alert = atom({ plugin: 'victrix', key: 'alert' } as const, null as Signal | null)
 
 type Dollar = import('./lens').Dollar
 type TapeSite = RenderInput<'Pane'> | RenderInput<'AbovePrompt'>
@@ -50,7 +51,7 @@ export const registerTape = (on: On) => {
     const placed = await read($, isPlaced)
     const now = Date.now()
     if (!placed) return drawTape($, e, Math.max(20, e.props.bodyColumns), 'full', now)
-    const waits = (await read($, questions)).length > 0 || (await read($, asking)).length > 0 || (await read($, notes)).length > 0 || (await read($, pendingAdd)) !== null
+    const waits = (await read($, alert)) !== null || (await read($, questions)).length > 0 || (await read($, asking)).length > 0 || (await read($, notes)).length > 0 || (await read($, pendingAdd)) !== null
     return waits ? drawTape($, e, Math.max(20, e.props.bodyColumns), 'ask', now) : next(e)
   })
 }
@@ -105,28 +106,38 @@ export async function drawTape($: Dollar, e: TapeSite, room: number, mode: 'full
 
     // The ask: one line, the fewest words that still say what is assumed and what each answer does; the digits are
     // the keys; gone the moment it is answered. `1` is a check only because the person says they checked.
-    const question = pending[0]
+    // A trust signal that reached the line (a warning at once, a caution at the turn's end) comes before the mod's
+    // own questions: the worst thing wins, one line at a time. Its words say which side needs more.
+    const warning = await read($, alert)
+    const question = warning ? undefined : pending[0]
     const waitingAdd = await read($, pendingAdd)
-    const ask = waitingAdd !== null
-      ? `add a fact · ${waitingAdd} · type it in the prompt`
-      : question
-        ? question.kind === 'feel' ? `assumes ${question.says}` : `build ${question.says}?`
-        : askingNow[0]
-          ? `? ${askingNow[0]}  ·  answer in the chat`
-          : queued[0]
-            ? `${describeNote(queued[0])}  ·  Claude sees it next step`
-            : brokenClaim
-              ? `✗ ${brokenClaim.says}  ·  ${brokenClaim.counterexample ?? 'a case fails'}`
-              : ''
-    const keysRoom = question ? (question.kind === 'feel' ? 30 : 24) : 0
+    const ask = warning
+      ? `${warning.needs === 'maths' ? 'the maths needs more' : 'Claude needs a steer'} · ${warning.words}`
+      : waitingAdd !== null
+        ? `add a fact · ${waitingAdd} · type it in the prompt`
+        : question
+          ? question.kind === 'feel' ? `Claude assumed · ${question.says} · true?` : `build ${question.says}?`
+          : askingNow[0]
+            ? `? ${askingNow[0]}  ·  answer in the chat`
+            : queued[0]
+              ? `${describeNote(queued[0])}  ·  Claude sees it next step`
+              : brokenClaim
+                ? `✗ ${brokenClaim.says}  ·  ${brokenClaim.counterexample ?? 'a case fails'}`
+                : ''
+    const canRun = nowStep?.judge !== undefined && nowStep.judge !== ''
+    const keysRoom = warning ? (canRun ? 48 : 34) : question ? (question.kind === 'feel' ? 36 : 24) : 0
+    const askColour = warning && warning.level !== 'warning' ? LIVE_COLOUR : 'error'
     const askRow = ask ? (
       <Box key="ask" flexDirection="row" gap={2}>
         <Text dimColor>{mode === 'ask' ? '  ' : '╰ '}</Text>
-        <Text color="error">{draw.fit(ask, room - 2 - keysRoom)}</Text>
-        {/* The engine draws a plain Button as `1: label`, so the label carries no digit of its own. */}
-        {question ? <Button key="t:1" plain hotkey="1" label={question.kind === 'feel' ? 'checked' : 'build it'} onPress={() => answerQuestion($, question, 'yes')} /> : null}
-        {question ? <Button key="t:2" plain hotkey="2" label={question.kind === 'feel' ? 'check it' : 'not worth it'} onPress={() => answerQuestion($, question, 'no')} /> : null}
-        {question?.kind === 'feel' ? <Button key="t:3" plain hotkey="3" label="unsure" onPress={() => answerQuestion($, question, 'unsure')} /> : null}
+        <Text color={askColour}>{draw.fit(ask, room - 2 - keysRoom)}</Text>
+        {/* The engine draws a plain Button as `1: label`, so the label carries no digit of its own; the words are the owner's. */}
+        {warning && canRun ? <Button key="t:1" plain hotkey="1" label="run the check" onPress={() => answerAlert($, warning, 'run')} /> : null}
+        {warning ? <Button key="t:2" plain hotkey="2" label="ask Claude to find out" onPress={() => answerAlert($, warning, 'ask')} /> : null}
+        {warning ? <Button key="t:3" plain hotkey="3" label="not sure" onPress={() => answerAlert($, warning, 'unsure')} /> : null}
+        {question ? <Button key="t:1" plain hotkey="1" label={question.kind === 'feel' ? 'I checked' : 'build it'} onPress={() => answerQuestion($, question, 'yes')} /> : null}
+        {question ? <Button key="t:2" plain hotkey="2" label={question.kind === 'feel' ? 'you check' : 'not worth it'} onPress={() => answerQuestion($, question, 'no')} /> : null}
+        {question?.kind === 'feel' ? <Button key="t:3" plain hotkey="3" label="not sure" onPress={() => answerQuestion($, question, 'unsure')} /> : null}
       </Box>
     ) : null
 
