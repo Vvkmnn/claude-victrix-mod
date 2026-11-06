@@ -144,7 +144,7 @@ export const reviewText = (item: PlanItem, premises: readonly Claim[]): string =
   return [
     `REVIEW before step "${item.name}" (from Victrix, the plan lens). The previous step is done; the person wants to preview the next one before it starts.`,
     `Preview it in three lines: what this step does${item.note ? ` (${item.note})` : ''}, how much effort it deserves, and how its result will be verified${item.judge ? ` (verify: ${item.judge})` : ''}${item.slow ? ` against the slow version (${item.slow})` : ''}.`,
-    `It rests on these premises, status = ⊓ {${premises.map(claim => GLYPH[claim.status]).join(' ') || '∅'}} = ${GLYPH[status]} ${status}:`,
+    `It rests on these premises, status = min {${premises.map(claim => GLYPH[claim.status]).join(' ') || ' '}} = ${GLYPH[status]} ${status}:`,
     facts,
     item.guard ? `Guard: ${item.guard}.` : 'No guard is written: say what the fast path checks and what it costs, or that none is needed.',
     item.options.length > 0 ? `Options worth 2× still open: ${item.options.join('; ')}.` : '',

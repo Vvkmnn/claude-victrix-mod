@@ -76,7 +76,7 @@ test('the snake is the person’s colour and the spine runs through done and liv
   expect(done?.spans.find(part => part.text === '┃')?.paint).toBe('text')
   expect(live?.spans.find(part => part.text === '┃')?.paint).toBe('text')
   expect(open?.spans.some(part => part.text === '┃')).toBe(false)
-  expect(text([open!]).startsWith('   ▫ [ ] Gaits')).toBe(true)
+  expect(text([open!]).startsWith('   ○ [ ] Gaits')).toBe(true)
 })
 
 test('the head sits at headFraction of its row', () => {
@@ -88,27 +88,27 @@ test('the head sits at headFraction of its row', () => {
   }
   for (const columns of [24, 50, 80]) {
     const none = at(0, columns)
-    expect(none.plain.indexOf('◘')).toBe(4)
+    expect(none.plain.indexOf('▶')).toBe(4)
     expect(none.width).toBeLessThanOrEqual(columns)
     // Half the effort puts the head half way round the hairpin: past the top row's corner when the loop has a body.
     const half = at(EFFORT_HALF, columns)
-    expect(half.plain.indexOf('◘') === -1 || half.plain.indexOf('◘') > 4).toBe(true)
+    expect(half.plain.indexOf('▶') === -1 || half.plain.indexOf('▶') > 4).toBe(true)
     expect(half.plain.startsWith('   ┗')).toBe(true)
     expect(half.plain).not.toContain('/')
   }
 })
 
-test('done rows read checkbox, name, rung, time and tokens in columns, the rung ∅ for a step that rested on nothing, and crop the name first', () => {
+test('done rows read checkbox, name, rung, time and tokens in columns, the rung { } for a step that rested on nothing, and crop the name first', () => {
   const rows = layout(input(50, 30))
   const crab = text([rows.find(one => one.key === 'step:Crab')!])
-  expect(crab).toBe('   ┃ [✓] Crab · ∅ ·  8s · 1.2k')
+  expect(crab).toBe('   ┃ [✓] Crab · { } ·  8s · 1.2k')
   // Gull's rung repeats Crab's, so its cell is blank; it has no spend, so the row ends at the name.
   expect(text([rows.find(one => one.key === 'step:Gull')!])).toBe('   ┃ [✓] Gull')
   // The live row sits in the same columns, its clock right-aligned under the times.
-  expect(text([rows.find(one => one.key === 'step:Lens')!])).toBe('   ┃ [ ] Lens     · 47m')
+  expect(text([rows.find(one => one.key === 'step:Lens')!])).toBe('   ┃ [ ] Lens       · 47m')
   const long = parsePlan(['## Done', '- [x] **Crab with a very long and winding name** — band', '## In Progress', '- [ ] **Lens**'].join('\n'))
   const cropped = text([layout({ ...input(30, 30), tree: long }).find(one => one.key.startsWith('step:Crab'))!])
-  expect(cropped.endsWith(' · ∅')).toBe(true)
+  expect(cropped.endsWith(' · { }')).toBe(true)
   expect(cropped).toContain('…')
   expect(Array.from(cropped).length).toBeLessThanOrEqual(30)
 })
@@ -117,12 +117,12 @@ test('a done step with facts shows its whole meet from 60 columns and the result
   const plan = parsePlan(['## Done', '- [x] **Crab** — band · facts: code: a', '- [x] **Gull** — wing · facts: code: b', '- [x] **Tern** — tail', '## In Progress', '- [ ] **Lens**'].join('\n'))
   const claims: Claim[] = [{ step: 'Crab', says: 'a', status: 'checked', source: 'tool', at: NOW }, { step: 'Gull', says: 'b', status: 'checked', source: 'tool', at: NOW }]
   const wide = layout({ ...input(66, 30), tree: plan, claims })
-  expect(text([wide.find(one => one.key === 'step:Crab')!])).toContain('Crab · ⊓ { ■ } = ■')
-  expect(text([wide.find(one => one.key === 'step:Gull')!])).not.toContain('⊓')
-  expect(text([wide.find(one => one.key === 'step:Tern')!])).toContain('Tern · ∅')
+  expect(text([wide.find(one => one.key === 'step:Crab')!])).toContain('Crab · min { ■ } = ■')
+  expect(text([wide.find(one => one.key === 'step:Gull')!])).not.toContain('min')
+  expect(text([wide.find(one => one.key === 'step:Tern')!])).toContain('Tern · { }')
   const narrow = layout({ ...input(50, 30), tree: plan, claims })
   expect(text([narrow.find(one => one.key === 'step:Crab')!])).toContain('Crab · ■')
-  expect(text([narrow.find(one => one.key === 'step:Crab')!])).not.toContain('⊓')
+  expect(text([narrow.find(one => one.key === 'step:Crab')!])).not.toContain('min')
 })
 
 test('every number carries a unit, short when narrow and a word when wide', () => {
@@ -132,16 +132,16 @@ test('every number carries a unit, short when narrow and a word when wide', () =
 
 test('proof draws the meet in notation, then each fact as its words and its rung, then the check', () => {
   const drawn = text(layout(input(66, 30)))
-  expect(drawn).toContain('Lens ⊑ ⊓ {')
-  expect(drawn).toContain('} = △')
+  expect(drawn).toContain('Lens ≤ min {')
+  expect(drawn).toContain('} = ○')
   expect(drawn).toContain('prices are in cents')
   expect(drawn).toContain('Claude assumes this; nobody checked it')
-  expect(drawn).toContain('△ prices are in cents')
+  expect(drawn).toContain('○ prices are in cents')
   // The evidence sits in its own column, so the claim is padded to the widest claim before the ` · `.
-  expect(drawn).toMatch(/■ ids are dense\s+· ⊢ bun test/)
-  expect(drawn).toContain('⊢ bun test')
-  expect(statusWord(claims[0]!)).toBe('⊢ bun test')
-  expect(meetLine('Lens', [], 66)).toBe('Lens ⊑ ⊓ { ∅ } = △')
+  expect(drawn).toMatch(/■ ids are dense\s+· by bun test/)
+  expect(drawn).toContain('by bun test')
+  expect(statusWord(claims[0]!)).toBe('by bun test')
+  expect(meetLine('Lens', [], 66)).toBe('Lens ≤ min { } = ○')
 })
 
 test('process shows the live call first, then the newest earned actions, and a decline as a decline, never red', () => {
@@ -166,12 +166,12 @@ test('the food of the tasks ahead sits in column 3 before the state box', () => 
     expect(rows.length).toBe(2)
     for (const one of rows) {
       const plain = text([one])
-      expect(Array.from(plain)[3]).toBe('▫')
+      expect(Array.from(plain)[3]).toBe('○')
       expect(plain.indexOf('[ ]')).toBe(5)
     }
   }
   const broken = { ...claims[0]!, step: 'Gaits', says: 'x', status: 'broken' as const }
-  const food = (list: Claim[]) => layout({ ...input(50, 30), claims: list }).find(one => one.key === 'step:Gaits')!.spans.find(part => part.text === '▫')?.paint
+  const food = (list: Claim[]) => layout({ ...input(50, 30), claims: list }).find(one => one.key === 'step:Gaits')!.spans.find(part => part.text === '○')?.paint
   expect(food([])).toBe('dim')
   expect(food([broken])).toBe('bad')
 })
@@ -184,10 +184,10 @@ test('the footer’s ? is the last cell and its parts drop whole', () => {
     expect(math.press?.kind).toBe('help')
   }
   const at = (columns: number) => text([layout(input(columns, 30)).find(one => one.key === 'footer:math')!])
-  expect(at(60)).toContain('⊓')
+  expect(at(60)).toContain('min')
   expect(at(24)).toContain('Σ')
   expect(at(24)).toContain('t 47m')
-  expect(at(24)).not.toContain('⊓')
+  expect(at(24)).not.toContain('min')
   expect(at(10)).not.toContain('t 47m')
   expect(at(10)).toMatch(/^Σ \S+ +\?$/)
 })
@@ -196,7 +196,7 @@ test('no plan: the bare face says so, the recent plans are offered as food, the 
   const rows = layout({ ...input(40, 20), tree: null, claims: [], recent: [{ title: 'Brave otter', path: '/p/brave-otter.md' }] })
   const drawn = text(rows)
   expect(drawn).toContain('no plan yet')
-  expect(drawn).toContain('▫ [ ] Brave otter')
+  expect(drawn).toContain('○ [ ] Brave otter')
   expect(drawn).toContain('plan this: shift+tab')
   expect(rows.find(one => one.key === 'box:top')?.spans.length).toBe(0)
   expect(rows.at(-1)?.press?.kind).toBe('help')
@@ -207,7 +207,7 @@ test('planning: the tail creeps in from the right ending in the head, and the na
   const calls = Array.from({ length: 20 }, (_, n) => ({ text: `edit f${n}.ts`, isOk: true, at: NOW - n * 1000 }))
   const rows = layout({ ...input(50, 20), tree: null, claims: [], isPlanning: true, spent: { ...spent, last: calls, steps: {} } })
   const top = text([rows.find(one => one.key === 'box:top')!])
-  expect(top).toContain('◘━')
+  expect(top).toContain('▶━')
   expect(top.endsWith('━')).toBe(true)
   expect(Array.from(top).length).toBe(50)
   expect(text(rows)).toMatch(/planning · \d+s/)
@@ -333,7 +333,7 @@ test('the dots say what each row is: hollow for an assumed fact, a check not run
   const foods = log.filter(row => /^process:\d+$/.test(row.key)).map(row => [text([row]).trim().slice(0, 1), row.food?.text, row.food?.paint])
   expect(foods).toContainEqual(['✓', '●', 'text'])
   expect(foods).toContainEqual(['✗', '◦', 'bad'])
-  expect(foods).toContainEqual(['⊘', '◦', 'dim'])
+  expect(foods).toContainEqual(['×', '◦', 'dim'])
 })
 
 test('the path ahead is faint food every other cell along the top and bottom rows, anchored at the right corners, exact to the width', () => {
@@ -352,14 +352,14 @@ test('the path ahead is faint food every other cell along the top and bottom row
       }
       for (const part of one.spans.filter(part => part.text === '·')) expect(part.paint).toBe('faint')
     }
-    expect(text([top]).startsWith('   ┗◘')).toBe(true)
+    expect(text([top]).startsWith('   ┗▶')).toBe(true)
   }
 })
 
 test('as the head comes down the right edge it eats the food: body above it, the head, food below, every row ending at the last column', () => {
   const rows = layout(manyInput(50, 60, 4))
   const inner = insideLoop(rows)
-  const headAt = inner.findIndex(one => text([one]).endsWith('◘'))
+  const headAt = inner.findIndex(one => text([one]).endsWith('▶'))
   expect(headAt).toBeGreaterThan(0)
   expect(headAt).toBeLessThan(inner.length - 1)
   for (const [index, one] of inner.entries()) {

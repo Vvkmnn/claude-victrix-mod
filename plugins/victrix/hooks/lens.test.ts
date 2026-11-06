@@ -230,12 +230,12 @@ for (const surface of SURFACES) {
     // The snake comes down the steps: the done step ticked, the live one with its clock, the tasks ahead as food.
     expect(drawn).toMatch(/┃ \[ \] Lens\s+· \d+s/)
     expect(drawn).toContain('[✓] Crab')
-    expect(drawn).toContain('▫ [ ] Gaits')
+    expect(drawn).toContain('○ [ ] Gaits')
     // Proof: the meet in notation, the fact in words then its rung, the check with its verify line.
-    expect(drawn).toContain('Lens ⊑ ⊓ {')
+    expect(drawn).toContain('Lens ≤ min {')
     expect(drawn).toContain('prices are in cents')
     expect(drawn).toContain('Claude assumes this; nobody checked it')
-    expect(drawn).toContain('⊢ one screen')
+    expect(drawn).toContain('check one screen')
     expect(drawn).toContain('proof')
     expect(drawn).toContain('process')
     // No zone rules, no gauges, no tree glyphs, nothing of the old labels.
@@ -243,7 +243,7 @@ for (const surface of SURFACES) {
     expect(drawn).not.toContain('gauges')
     expect(drawn).not.toContain('├')
     expect((await pane.findAll({ type: 'Text' })).find(text => text.text === 'Lens')?.props.color).toBe('rgb(215,119,87)')
-    // An assumed fact is quiet: the theme's text with the △ carrying the meaning; red is kept for broken and needs-you.
+    // An assumed fact is quiet: the theme's text with the ○ carrying the meaning; red is kept for broken and needs-you.
     expect((await pane.findAll({ type: 'Text' })).find(text => text.text === 'prices are in cents')?.props.color).toBeUndefined()
   })
 
@@ -322,7 +322,7 @@ for (const surface of SURFACES) {
     const review = world.submitted.find(one => one.text.includes('REVIEW before step'))
     expect(review?.text).toContain('REVIEW before step "Gaits"')
     expect(review?.text).toContain('Preview it in three lines')
-    expect(review?.text).toContain('status = ⊓ {')
+    expect(review?.text).toContain('status = min {')
     expect(review?.text).toContain('wait for the answers before any tool call')
     const pane = await mountPane($)
     expect(await joined(pane)).toContain('review · Gaits')
@@ -580,10 +580,10 @@ for (const surface of SURFACES) {
     await pane.press({ key: 'k:e' })
     const texts = await textsOf(pane)
     expect(texts.some(text => text.includes('says'))).toBe(true)
-    expect(texts.some(text => text.includes('Lens ⊑ ⊓'))).toBe(true)
-    expect(texts.some(text => text.includes('{ △'))).toBe(true)
+    expect(texts.some(text => text.includes('Lens ≤ min'))).toBe(true)
+    expect(texts.some(text => text.includes('{ ○'))).toBe(true)
     expect(texts.some(text => text.includes('because') && text.includes('plans are hard to follow'))).toBe(true)
-    expect(texts.some(text => text.includes('∴'))).toBe(true)
+    expect(texts.some(text => /^\s{4}so\s{2,}/.test(text))).toBe(true)
     await pane.press({ key: 'close' })
     expect(await joined(pane)).toContain('[ ] Lens')
   })
@@ -598,7 +598,7 @@ for (const surface of SURFACES) {
     await pane.press({ key: 'k:h' })
     const after = await joined(pane)
     expect(after.split('Victrix').length - 1).toBe(1)
-    expect(after).toContain('✗ ⊑ △ ⊑ ◇ ⊑ ■ ⊑ ◆')
+    expect(after).toContain('✗ ≤ ○ ≤ ■ ≤ ●')
     expect(after).toContain('d doubt')
     expect(after).toContain('Tao')
   })

@@ -11,7 +11,7 @@ const PROGRESS = /^\*\*Progress:\s*(.+?)\*\*/
 const TAG = /^(why|because|trade|judge|verify|assume[sd]?|facts?|guard|options?|slow):\s*(.*)$/i
 // A fact line may name where it came from: `data: ids are dense`, `you: prices are in cents`.
 const SOURCE = /^(data|code|you|claude):\s*(.*)$/i
-// Wording that leans on something unchecked; the lens shows these lines under their step as △.
+// Wording that leans on something unchecked; the lens shows these lines under their step as ○ (open).
 const ASSUMES = /\b(assum\w*|should|probably|likely|presumably|supposedly|expect\w*|guess\w*)\b/i
 
 type Tags = Pick<PlanItem, 'note' | 'why' | 'trade' | 'judge' | 'assumptions' | 'facts' | 'guard' | 'options' | 'slow'>

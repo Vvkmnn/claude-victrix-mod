@@ -2,6 +2,7 @@
 // weakest premise (T1, `combine_le_own` and `combine_le_premise`). Labels are a pure function of (status,
 // source): the model never writes one. Pure; no `$`.
 import type { Claim, ClaimSource, Evidence, Status } from '../types'
+import { MARK } from './draw'
 
 export type { Claim, ClaimSource, Evidence, Status }
 
@@ -24,7 +25,7 @@ export const weakest = (claims: readonly Claim[]): Claim | undefined =>
   claims.reduce<Claim | undefined>((low, claim) => (low === undefined || RANK[claim.status] < RANK[low.status] ? claim : low), undefined)
 
 /** The glyph a status draws: shape carries the meaning, colour only repeats it. */
-export const GLYPH: Readonly<Record<Status, string>> = { broken: '✗', open: '△', checked: '■', proved: '◆' }
+export const GLYPH: Readonly<Record<Status, string>> = { broken: MARK.broken, open: MARK.open, checked: MARK.checked, proved: MARK.proved }
 
 const STANDARD_AXIOMS: readonly string[] = ['propext', 'Classical.choice', 'Quot.sound']
 

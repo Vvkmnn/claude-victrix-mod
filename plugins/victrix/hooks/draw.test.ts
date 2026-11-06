@@ -62,11 +62,11 @@ test('spark keeps the last width values on the eight-step ramp', () => {
   for (const width of WIDTHS) expect(cells(spark([3, 1, 4, 1, 5, 9, 2, 6], width))).toBeLessThanOrEqual(width)
 })
 
-test('spinner cycles its ten braille frames in both directions of tick', () => {
-  expect(spinner(0)).toBe('⠋')
-  expect(spinner(9)).toBe('⠏')
-  expect(spinner(10)).toBe('⠋')
-  expect(spinner(-1)).toBe('⠏')
+test('spinner breathes through its four dot frames in both directions of tick', () => {
+  expect(spinner(0)).toBe('·')
+  expect(spinner(2)).toBe('●')
+  expect(spinner(4)).toBe('·')
+  expect(spinner(-1)).toBe('•')
 })
 
 test('the face has three states and a fixed width', () => {
@@ -126,7 +126,7 @@ test('the trunk prefixes are the one tree, rising into the face', () => {
 
 test('toAscii keeps a row readable without the glyphs', () => {
   expect(toAscii('╭─[-_-]━━╸━━ 6/15')).toBe('+-[-_-]==-== 6/15')
-  expect(toAscii('├ ✓ V0 · ○ V1 … ▸ ⠹ edit')).toBe('|-v V0 . o V1 ... > * edit')
+  expect(toAscii('├ ✓ V0 · ○ V1 … ▸ • edit')).toBe('|-v V0 . o V1 ... > * edit')
   expect(toAscii('▁▂▃')).toBe('###')
 })
 

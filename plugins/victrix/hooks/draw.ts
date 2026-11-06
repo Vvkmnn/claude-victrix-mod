@@ -157,9 +157,35 @@ export const spark = (values: readonly number[], width: number): string => {
     .join('')
 }
 
-export const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const
+/**
+ * A breathing dot, not braille: the braille frames are missing from SF Mono, the font the Claude desktop app and the
+ * owner's terminal draw in, and fall back at 8.89 px against a digit's 8.04 (demo/replay.sh), shifting the row.
+ */
+export const SPINNER = ['·', '•', '●', '•'] as const
 
-/** One braille frame per tick, round and round. */
+/**
+ * The one vocabulary every surface draws from (the design system's marks). Each glyph is in SF Mono and Menlo
+ * (demo/glyphs.sh) so nothing falls back to another font at another width. A mark is never colour alone: it always
+ * sits beside its word or in a place that names it.
+ */
+export const MARK = {
+  /** Claude, where it is now: the snake's head, drawn orange. */
+  head: '▶',
+  /** A step not reached yet. */
+  ahead: '○',
+  /** A step done. */
+  done: '✓',
+  /** Proof statuses, weakest first. */
+  open: '○',
+  checked: '■',
+  proved: '●',
+  broken: '✗',
+  /** The notation of the `e` card: `Step ≤ min { ○ open, ■ checked } = ○ open`. */
+  atMost: '≤',
+  weakest: 'min',
+} as const
+
+/** One spinner frame per tick, round and round. */
 export const spinner = (tick: number): string => SPINNER[((Math.floor(tick) % SPINNER.length) + SPINNER.length) % SPINNER.length] ?? SPINNER[0]
 
 export type FaceState = 'idle' | 'working' | 'worried'
@@ -251,9 +277,8 @@ const ASCII_MAP: ReadonlyArray<readonly [string, string]> = [
   ['◉', '*'],
   ['✓', 'v'],
   ['✗', 'x'],
-  ['△', '^'],
   ['■', '#'],
-  ['◆', '<>'],
+  ['▶', '>'],
   ['○', 'o'],
   ['·', '.'],
   ['…', '...'],

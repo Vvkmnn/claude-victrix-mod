@@ -1,9 +1,9 @@
 // The pane as rows of painted spans: the board (owner's drawings, 2026-11-05). Pure, no `$`: the lens paints the spans,
 // the kit measures every rung. One snake: born at the right edge of the face row, it wraps the face in its box, comes
-// down column 3 through the done steps, and ends as the current step's bar, whose head `◘` is Claude. Under it
+// down column 3 through the done steps, and ends as the current step's bar, whose head `▶` is Claude. Under it
 // `proof` (the maths, each unit an English line then its notation) and `process` (what Claude just did) sit inside the
 // hairpin, each fact, check and action a smaller food on its right edge (`◦` hollow while assumed or pending, `●`
-// filled once checked or done) over a faint trail `·` round the whole loop; then the tasks ahead, each a food `▫` the
+// filled once checked or done) over a faint trail `·` round the whole loop; then the tasks ahead, each a food `○` the
 // snake has yet to eat, and a two-line footer.
 //
 // The arithmetic (how far the head is, the log's folds, the one order in which a pane of any height hands out its
@@ -12,7 +12,7 @@
 // is the engine's own narrowing under a dialog.
 //
 // Colour is meaning: the snake's body and the marks are the person's own colour; orange (live) is where Claude is;
-// red is a failure or the person needed; the maths (operators, `⊢`, `Σ`, the face) share one calm accent from the
+// red is a failure or the person needed; the maths (operators, `≤ min`, `Σ`) share one calm accent from the
 // theme; sections, counts, times and tokens are dim.
 import type { Activity, ActivityLine, Claim, PlanItem, PlanTree, Signal, Status } from '../types'
 import { LOG_CAP, PROOF_CAP, budget, creepCells, foldLog, headFraction } from './board'
@@ -157,7 +157,7 @@ export const tokensText = (n: number, columns: number): string => {
 }
 
 /**
- * The words after a claim, the glyph already saying the status: `⊢ <what established it>` for evidence, `· stale`
+ * The words after a claim, the glyph already saying the status: `by <what established it>` for evidence, `· stale`
  * whenever its files moved since, and for an open claim who said it. An open claim from the person reads `you said
  * so`, never `you` alone: saying is not checking, and `checked by you` is a rung only when they say they ran it.
  */
@@ -165,10 +165,10 @@ export const statusWord = (claim: Claim): string => {
   if (claim.isChecking) return 'checking'
   const stale = claim.stale ? ' · stale' : ''
   if (claim.status === 'broken') return claim.counterexample ? `broken: ${claim.counterexample}` : 'broken'
-  if (claim.status === 'proved') return `${claim.evidence?.theorem ? `⊢ ${claim.evidence.theorem}` : 'proved'}${stale}`
+  if (claim.status === 'proved') return `${claim.evidence?.theorem ? `by ${claim.evidence.theorem}` : 'proved'}${stale}`
   if (claim.status === 'checked') {
     const by = claim.evidence?.command.split(' ').filter(Boolean).slice(0, 2).join(' ') ?? ''
-    return `${by ? `⊢ ${by}` : 'checked'}${stale}`
+    return `${by ? `by ${by}` : 'checked'}${stale}`
   }
   if (claim.source === 'you') return 'you said so'
   if (claim.source === 'doubt') return 'you doubted it'
@@ -199,7 +199,7 @@ export const factSentence = (claim: Claim): string => {
 }
 
 /**
- * The meet of a step's facts in notation, as spans: `H6 ⊑ ⊓ { △ cents, ■ dense } = △` (theorem T1 drawn), operators
+ * The meet of a step's facts in notation, as spans: `H6 ≤ min { ○ cents, ■ dense } = ○` (theorem T1 drawn), operators
  * in the maths colour, glyphs by status. The result after `=` is the point of the line, so it always fits: the names
  * inside the braces shorten (14 cells, 8, then glyphs alone) until the whole line fits `room`.
  */
@@ -207,25 +207,26 @@ export const meetSpans = (step: string, facts: readonly Claim[], room: number): 
   const name = step.split(' ')[0] ?? step
   const result = stepStatus(facts)
   const resultSpan = span(GLYPH[result], paintOf(result), true)
-  const tail: Span[] = [span(' } = ', 'math'), resultSpan]
+  // An empty set reads `min { } = ○`: the opening brace already carries its space, so the close drops its own.
+  const tail: Span[] = [span(facts.length === 0 ? '} = ' : ' } = ', 'math'), resultSpan]
   const inner = (nameCells: number): Span[] =>
     facts.length === 0
-      ? [span('∅', 'math')]
+      ? []
       : facts.flatMap((claim, index) => [
           ...(index > 0 ? [span(', ', 'math')] : []),
           span(GLYPH[claim.status], paintOf(claim.status)),
           ...(nameCells > 0 ? [span(` ${draw.fit(claim.says, nameCells)}`, 'dim')] : []),
         ])
   // The ladder: names at 14 cells, at 8, glyphs alone, then without the step's name (it is the live step, named
-  // just above), then the bare `⊓ = △`: the meet and its result are the last to go.
-  const named: Span[] = [span(name, 'text'), span(' ⊑ ⊓ { ', 'math')]
-  const unnamed: Span[] = [span('⊓ { ', 'math')]
+  // just above), then the bare `min = ○`: the meet and its result are the last to go.
+  const named: Span[] = [span(name, 'text'), span(` ${draw.MARK.atMost} ${draw.MARK.weakest} { `, 'math')]
+  const unnamed: Span[] = [span(`${draw.MARK.weakest} { `, 'math')]
   const candidates: Span[][] = [
     [...named, ...inner(14), ...tail],
     [...named, ...inner(8), ...tail],
     [...named, ...inner(0), ...tail],
     [...unnamed, ...inner(0), ...tail],
-    [span('⊓ = ', 'math'), resultSpan],
+    [span(`${draw.MARK.weakest} = `, 'math'), resultSpan],
   ]
   return candidates.find(parts => width(parts) <= room) ?? candidates[candidates.length - 1]!
 }
@@ -268,7 +269,7 @@ const callEvent = (line: ActivityLine, count: number, columns: number): LogEvent
   const isHelper = line.helper !== undefined
   const tag = line.helper ? `${line.helper} · ` : ''
   const counted = count > 1 ? { count: span(`×${count}`, 'dim') } : {}
-  if (line.isDeclined) return { minute, isHelper, mark: span('⊘', 'dim'), body: [span(`${columns >= 40 ? 'declined by you' : 'declined'} · ${tag}${line.text}`, 'dim')], ...counted, food: hollow('dim') }
+  if (line.isDeclined) return { minute, isHelper, mark: span('×', 'dim'), body: [span(`${columns >= 40 ? 'declined by you' : 'declined'} · ${tag}${line.text}`, 'dim')], ...counted, food: hollow('dim') }
   if (line.isRunning) return { minute, isHelper, mark: span('·', 'live'), body: [span(`${tag}${line.text}`, 'live')], food: hollow('live') }
   const paint: Paint = line.isOk ? 'dim' : 'bad'
   const time = line.ms !== undefined && line.ms >= 1000 ? { time: span(shortClock(line.ms), 'dim') } : {}
@@ -284,7 +285,7 @@ const logEvents = (input: LayoutInput, columns: number): LogEvent[] => {
     const stamped = /^\d\d:\d\d /.test(line)
     const what = stamped ? line.slice(6) : line
     const isBad = what.startsWith('✗') || what.startsWith('drift')
-    const isGood = what.includes('→ done') || what.startsWith('■') || what.startsWith('◆')
+    const isGood = what.includes('→ done') || what.startsWith('■') || what.startsWith(draw.MARK.proved)
     return { minute: stamped ? minuteOfStamp(line) : Infinity, isHelper: false, mark: span('·', 'dim'), body: [span(what, isBad ? 'bad' : isGood ? 'good' : 'dim')], food: filled('text') }
   })
   // Ledger lines first on a tie of the minute: a flip, a review or a drift is rarer than a call and must not fall
@@ -349,12 +350,12 @@ const needsText = (input: LayoutInput, live: PlanItem | undefined, facts: readon
   return `nothing needed; ${input.isWorking ? 'working' : 'idle'}`
 }
 
-/** `⊓ ∅ = △` or `⊓ { △ ■ } = △`: the meet of a list of statuses, glyphs only; `name ⊑` in front when a name is given. */
+/** `min { } = ○` or `min { ○ ■ } = ○`: the meet of a list of statuses, glyphs only; `name ≤` in front when a name is given. */
 const footerMeet = (statuses: readonly Status[], name?: string): Span[] => {
-  // The result is the meet of exactly what the braces show (honest notation): the weakest of them, `△` of nothing.
+  // The result is the meet of exactly what the braces show (honest notation): the weakest of them, `○` of nothing.
   const result = statuses.length === 0 ? 'open' : statuses.reduce(meet)
-  const inner: Span[] = statuses.length === 0 ? [span('∅', 'math')] : [span('{ ', 'math'), ...statuses.flatMap((status, index) => [...(index > 0 ? [span(' ', 'text')] : []), span(GLYPH[status], paintOf(status))]), span(' }', 'math')]
-  return [...(name ? [span(`${name} `, 'text'), span('⊑ ', 'math')] : []), span('⊓ ', 'math'), ...inner, span(' = ', 'math'), span(GLYPH[result], paintOf(result), true)]
+  const inner: Span[] = statuses.length === 0 ? [span('{ }', 'math')] : [span('{ ', 'math'), ...statuses.flatMap((status, index) => [...(index > 0 ? [span(' ', 'text')] : []), span(GLYPH[status], paintOf(status))]), span(' }', 'math')]
+  return [...(name ? [span(`${name} `, 'text'), span(`${draw.MARK.atMost} `, 'math')] : []), span(`${draw.MARK.weakest} `, 'math'), ...inner, span(' = ', 'math'), span(GLYPH[result], paintOf(result), true)]
 }
 
 /**
@@ -412,7 +413,7 @@ const foodOfStatus = (status: Status): Span => (status === 'broken' ? hollow('ba
  * the head sits above the next task's food and drops onto it. The head's place on that loop is `headFraction`; the
  * body is drawn from `┗` to the head. Ahead of the head the loop is a faint, evenly spaced trail `·`, and on the
  * right edge the block's own food in colour: every fact, check and action ends its row with its dot (smaller than a
- * task's `▫`) the head eats as it comes down, so the loop fills with what happened instead of standing empty. Every
+ * task's `○`) the head eats as it comes down, so the loop fills with what happened instead of standing empty. Every
  * inner row is cut two cells short of the edge and ends at the last column exactly, whether body, head or food is
  * there, so nothing moves when the head arrives and nothing falls off the board at any width.
  */
@@ -422,7 +423,7 @@ const loopRows = (live: PlanItem, facts: readonly Claim[], calls: number, column
   const bottomLen = Math.max(1, right - SPINE_COL + 1)
   const total = topLen + inner.length + bottomLen
   const at = Math.min(total - 1, Math.floor(headFraction(live, facts, calls) * (total - 1)))
-  const cell = (index: number, body: string): Span | null => (index < at ? span(body, 'live') : index === at ? span('◘', 'live', true) : null)
+  const cell = (index: number, body: string): Span | null => (index < at ? span(body, 'live') : index === at ? span(draw.MARK.head, 'live', true) : null)
   // Ahead of the head the whole loop is marked with faint food (owner: around the entire hairpin, subtly, equidistant):
   // every other cell along the top and bottom rows and every row down the side, which the eye reads as one spacing
   // since a cell is about twice as tall as it is wide; anchored at the right corners so the two rows' dots line up.
@@ -502,7 +503,7 @@ const proofUnits = (live: PlanItem, facts: readonly Claim[], columns: number, in
       ? hasWords ? (checkResultOf.evidence?.exitCode !== undefined ? `✗ exit ${checkResultOf.evidence.exitCode}` : '✗ failed') : '✗'
       : hasWords ? `✓ passed${checkResultOf.evidence ? ` ${shortClock(checkResultOf.evidence.ms)}` : ''}` : '✓'
     : 'c'
-  const checkCells: Cell[][] = live.judge ? [[{ spans: [span('⊢ ', 'math'), span(live.judge, 'text')] }, { spans: [span(checkWord, checkResultOf ? (checkBroken ? 'bad' : 'good') : 'dim')] }]] : []
+  const checkCells: Cell[][] = live.judge ? [[{ spans: [span('check ', 'math'), span(live.judge, 'text')] }, { spans: [span(checkWord, checkResultOf ? (checkBroken ? 'bad' : 'good') : 'dim')] }]] : []
   const lined = table([...factCells, ...checkCells], columns - 2, MARK_COL + 2)
   const factUnits: Unit[] = facts.map((claim, index) => {
     const press: Press = { kind: 'fact', step: live.name, index }
@@ -526,7 +527,7 @@ const proofUnits = (live: PlanItem, facts: readonly Claim[], columns: number, in
 const openRows = (open: readonly PlanItem[], b: Budget, input: LayoutInput, columns: number): LayoutRow[] => {
   const task = (item: PlanItem): LayoutRow => {
     const facts = factsOf(item, input.claims)
-    return row(`step:${item.name}`, [gapSpan(SPINE_COL), span('▫', foodPaint(item, facts)), gapSpan(1), span('[ ]', 'text'), gapSpan(1), span(item.name, 'text')], columns, { kind: 'step', step: item.name })
+    return row(`step:${item.name}`, [gapSpan(SPINE_COL), span(draw.MARK.ahead, foodPaint(item, facts)), gapSpan(1), span('[ ]', 'text'), gapSpan(1), span(item.name, 'text')], columns, { kind: 'step', step: item.name })
   }
   const last = open[open.length - 1]
   if (b.open <= 0 || !last) return []
@@ -564,7 +565,7 @@ const bareBoard = (input: LayoutInput, columns: number, height: number): LayoutR
   // No face: while a plan is written the snake creeps in from the right edge along the top row toward its corner;
   // with no plan at all the top row is empty and the second says so.
   const creep = input.isPlanning ? creepCells(calls, columns - SPINE_COL - 1) : 0
-  const tail: Span[] = creep > 0 ? [gapSpan(columns - creep), span('◘', 'live', true), span('━'.repeat(creep - 1), 'text')] : []
+  const tail: Span[] = creep > 0 ? [gapSpan(columns - creep), span(draw.MARK.head, 'live', true), span('━'.repeat(creep - 1), 'text')] : []
   const first = input.spent.last.reduce<number | undefined>((least, line) => (line.at === undefined ? least : Math.min(least ?? line.at, line.at)), undefined)
   const body: LayoutRow[] = [
     tail.length > 0 ? row('box:top', tail, columns) : blank('box:top'),
@@ -573,7 +574,7 @@ const bareBoard = (input: LayoutInput, columns: number, height: number): LayoutR
     ...(planningRow > 0 ? [row('plan:now', [gapSpan(SPINE_COL), span(`planning · ${shortClock(first === undefined ? 0 : input.now - first)}`, 'live')], columns)] : []),
     ...(hasProcess ? processRows(input, columns, events, logCount) : []),
     ...(picksShown > 0 ? [blank('gap:plans')] : []),
-    ...input.recent.slice(0, picksShown).map(pick => row(`plan:${pick.path}`, [gapSpan(SPINE_COL), span('▫', 'dim'), gapSpan(1), span('[ ]', 'text'), gapSpan(1), span(pick.title, 'text')], columns, { kind: 'plan', path: pick.path })),
+    ...input.recent.slice(0, picksShown).map(pick => row(`plan:${pick.path}`, [gapSpan(SPINE_COL), span(draw.MARK.ahead, 'dim'), gapSpan(1), span('[ ]', 'text'), gapSpan(1), span(pick.title, 'text')], columns, { kind: 'plan', path: pick.path })),
     ...(hintCount > 0 ? [row('hint', [gapSpan(SPINE_COL), span('plan this: shift+tab', 'dim')], columns)] : []),
   ]
   const trailer = [...(problemCount > 0 && input.problem ? [row('problem', [span(`   ${input.problem}`, 'bad')], columns)] : []), ...footerRows(footerCount, input, columns, undefined, [])]
@@ -600,7 +601,7 @@ export const layout = (input: LayoutInput): LayoutRow[] => {
   const events = logEvents(input, columns)
 
   // The plan's list as one table (owner: lined up, never ragged): the name, the rung, the time, the tokens, each in
-  // its column. A done step's rung is its lattice value: `∅` when it rested on nothing (no facts, no check), the
+  // its column. A done step's rung is its lattice value: `{ }` when it rested on nothing (no facts, no check), the
   // whole meet from 60 columns, the result glyph alone below; shown only where it differs from the row above (owner:
   // "if it is on the row above don't repeat; if unique leave it"), the first shown row always carrying one. Tokens
   // drop under 40 columns, times under 24. The live row sits in the same columns with its clock where the rung goes.
@@ -609,7 +610,7 @@ export const layout = (input: LayoutInput): LayoutRow[] => {
   const rungStatuses = (item: PlanItem): Status[] => [...factsOf(item, input.claims).map(claim => claim.status), ...(item.judge ? [checkResult(item, input.claims)?.status ?? 'open'] : [])]
   const rungCell = (item: PlanItem): Cell => {
     const statuses = rungStatuses(item)
-    if (statuses.length === 0) return { spans: [span('∅', 'math')] }
+    if (statuses.length === 0) return { spans: [span('{ }', 'math')] }
     const status = statuses.reduce(meet)
     return { spans: columns >= 60 ? footerMeet(statuses) : [span(GLYPH[status], paintOf(status))] }
   }
@@ -653,7 +654,7 @@ export const layout = (input: LayoutInput): LayoutRow[] => {
       ...(b.doneFoldRow ? [row('done:more', [gapSpan(SPINE_COL), span('┃', 'text'), span(`   … ${b.doneFolded}${columns >= 24 ? ' done' : ''}`, 'dim')], columns)] : []),
       ...planRows(done.slice(done.length - b.done), live),
       ...(live ? loopRows(live, liveFacts, liveSpend?.calls ?? 0, columns, inner) : []),
-      ...(landed ? [row('live:rest', [gapSpan(SPINE_COL), span('◘', 'live', true)], columns)] : []),
+      ...(landed ? [row('live:rest', [gapSpan(SPINE_COL), span(draw.MARK.head, 'live', true)], columns)] : []),
       ...(b.open > 0 ? openRows(open, b, input, columns) : []),
       ...(live ? [] : inner.length > 0 ? [blank('gap:proof'), ...inner] : []),
     ]
@@ -678,7 +679,7 @@ export const layout = (input: LayoutInput): LayoutRow[] => {
 }
 
 /** Every non-ASCII glyph the layout may draw; a kit test fails the build on any other. */
-export const GLYPHS = new Set([...'╭╮╰╯│─┃┗┏┓━╸◘▫◦●✓▶○~△◇■◆✗⊑⊓⊢∀∃∈≥≤≠¬⇒∴Σ…·⊘∅╶→×−–', ...draw.SPINNER])
+export const GLYPHS = new Set([...'╭╮╰╯│─┃┗┏┓┛━╸◦●○✓▶~■✗≤≥Σ…·•→×−–', ...draw.SPINNER])
 
 /** True when every character of every span is ASCII or in the dictionary. */
 export const isInDictionary = (rows: readonly LayoutRow[]): boolean =>

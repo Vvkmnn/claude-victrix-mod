@@ -41,7 +41,7 @@ test('at a generous budget every open step carries its detail and the done steps
   expect(texts).toContain('promos never exceed the price')
   expect(texts).toContain('two codes never share a prefix')
   expect(fitted.rows.find(row => row.text === 'Apply promos')?.right).toBe('now')
-  expect(fitted.rows.find(row => row.text === 'Stacking rules')?.right).toBe('△1')
+  expect(fitted.rows.find(row => row.text === 'Stacking rules')?.right).toBe('○1')
 })
 
 test('the detail under the step being worked branches off the trunk and closes the branch', () => {
@@ -51,7 +51,7 @@ test('the detail under the step being worked branches off the trunk and closes t
   expect(detail.map(row => row.trunk)).toEqual(['detail', 'detail', 'detail', 'detail', 'detail', 'detailLast'])
   expect(detail[1]?.glyph).toBe('✗')
   expect(detail[1]?.right).toBe('weakest')
-  expect(detail[2]?.glyph).toBe('△')
+  expect(detail[2]?.glyph).toBe('○')
   // By default the tree carries the facts alone; the rest of the detail is the map's `now` zone.
   const factsOnly = fitRows({ rows: 80, tree, claims: [broken] }).rows.filter(row => row.step === 'Apply promos' && row.kind !== 'step')
   expect(factsOnly.map(row => row.kind)).toEqual(['fact', 'fact'])

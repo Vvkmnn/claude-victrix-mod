@@ -64,7 +64,7 @@ const counts = (facts: readonly Claim[]) => {
   const open = facts.filter(claim => claim.status === 'open').length
   const broken = facts.filter(claim => claim.status === 'broken').length
   const checked = facts.filter(claim => claim.status === 'checked' || claim.status === 'proved').length
-  return [open > 0 ? `△${open}` : '', checked > 0 ? `■${checked}` : '', broken > 0 ? `✗${broken}` : ''].filter(Boolean).join(' ')
+  return [open > 0 ? `○${open}` : '', checked > 0 ? `■${checked}` : '', broken > 0 ? `✗${broken}` : ''].filter(Boolean).join(' ')
 }
 
 const stepRow = (item: PlanItem, isNow: boolean, isLast: boolean, facts: readonly Claim[], right: string): MapRow => ({
