@@ -623,8 +623,12 @@ export const registerLens = (on: On, motion = true, review = true) => {
       description: 'Open the instrument: the plan as Claude works it, what it leans on, what needs you',
       argumentHint: '[plan file]',
     })
+    // The saved plan belongs to an earlier session in this repo: follow it only when this session is that one resumed
+    // (it already holds messages). A new session follows the plan its own plan mode names, and until then offers the
+    // recent ones; otherwise a new chat showed an older chat's plan (owner's desktop test, 2026-11-07).
     const saved = await $.store.get(planPathKey(e.cwd))
-    if (typeof saved === 'string') await loadPlan($, saved, 'start')
+    const isResumed = (await $.session.messages().catch(() => [])).length > 0
+    if (typeof saved === 'string' && isResumed) await loadPlan($, saved, 'start')
     if ((await read($, plan)) === null) await refreshRecent($)
     await reconcileForm($, 'unasked')
 

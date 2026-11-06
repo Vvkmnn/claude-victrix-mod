@@ -364,8 +364,9 @@ for (const surface of SURFACES) {
     expect(world.read).toEqual([])
   })
 
-  test(`${surface}: the plan followed in this repo is followed again at session start`, async ($, on) => {
+  test(`${surface}: a resumed session (one that already holds messages) follows the plan it saved`, async ($, on) => {
     const world = beneath(on, { files: { [PATH]: PLAN }, store: { [`victrix.planPath:${CWD}`]: PATH } })
+    on('session.messages', async () => ({ value: [{ role: 'user', content: 'earlier' }] as never }))
     await $.session.start(START)
     expect(world.read).toContain(PATH)
     expect(await joined(await mountPane($))).toContain('1/3 steps')
@@ -380,6 +381,7 @@ for (const surface of SURFACES) {
 
   test(`${surface}: an unreadable plan is drawn as such, with its path`, async ($, on) => {
     beneath(on, { store: { [`victrix.planPath:${CWD}`]: PATH } })
+    on('session.messages', async () => ({ value: [{ role: 'user', content: 'earlier' }] as never }))
     await $.session.start(START)
     const texts = await textsOf(await mountPane($))
     expect(texts.some(text => text.includes('cannot read the plan · '))).toBe(true)
@@ -653,6 +655,25 @@ for (const surface of SURFACES) {
     await call
     expect(world.opened.at(-1)?.columns).toBe(43)
   })
+
+  // Each session its own plan
+
+  test(`${surface}: a new session never follows an older session's saved plan; it follows its own once plan mode names it and Claude writes it`, async ($, on) => {
+    const OLD = `${PLANS}/older-session.md`
+    const world = beneath(on, { files: { [OLD]: PLAN.replace('# Brave otter', '# An older session').replace('**Lens**', '**Older step**') }, store: { [`victrix.planPath:${CWD}`]: OLD } })
+    await $.session.start(START)
+    const pane = await mountPane($)
+    expect(await joined(pane)).not.toContain('[ ] Older step')
+    // This session's plan mode names its own file, which Claude has not written yet; then Claude writes it and the
+    // turn's end re-reads the followed file.
+    await $.prompt.attachment(planNote(PATH))
+    expect(await joined(pane)).not.toContain('[ ] Older step')
+    world.files.set(PATH, PLAN)
+    await $.turn.start({ turnId: 'turn-1', prompt: 'plan' } as never)
+    await $.turn.complete({ turnId: 'turn-1', answer: '', durationMs: 1, isAborted: false, reason: 'done' } as never)
+    expect(await joined(pane)).toContain('Brave otter')
+  })
+
 
   // Sizes: pane, row, hidden; `s` moves through them from what is on screen
 

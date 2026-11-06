@@ -60,7 +60,7 @@ Three sizes of the same snake: the **pane**, the **row** above the prompt (`━�
 /plugin install victrix@claude-victrix-mod
 ```
 
-The beta (0.4.0-beta.2: the snake head `victrix▶` on every size, `s` for size, one key card, the plan's `Active:` step lit):
+The beta (0.4.0-beta.3: the snake head `victrix▶` on every size, `s` for size, one key card, the plan's `Active:` step lit):
 
 ```
 /plugin marketplace add Vvkmnn/claude-victrix-mod#beta
