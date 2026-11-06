@@ -88,7 +88,8 @@ test('the head sits at headFraction of its row', () => {
   }
   for (const columns of [24, 50, 80]) {
     const none = at(0, columns)
-    expect(none.plain.indexOf('▶')).toBe(4)
+    // At the start the whole mark fits behind the corner: `┗victrix▶`, the name never cut.
+    expect(none.plain.indexOf('victrix▶')).toBe(4)
     expect(none.width).toBeLessThanOrEqual(columns)
     // Half the effort puts the head half way round the hairpin: past the top row's corner when the loop has a body.
     const half = at(EFFORT_HALF, columns)
@@ -337,6 +338,32 @@ test('the dots say what each row is: hollow for an assumed fact, a check not run
   expect(foods).toContainEqual(['×', '◦', 'dim'])
 })
 
+test('wherever the head is, from the first call to the last, the mark is whole: victrix▶ on a run, the name at the corner while the head is on the edge, the bare head only where the word cannot fit', () => {
+  const bare = parsePlan(['## In Progress', '- [ ] **Lens** — the outline'].join('\n'))
+  for (const columns of [10, 12, 13, 24, 50, 80]) {
+    let seenBottom = false
+    for (let calls = 0; calls <= EFFORT_HALF * 4; calls += 1) {
+      const spend = { calls, fails: 0, tokens: 0, enteredAt: NOW, ms: 0 }
+      const rows = layout({ ...input(columns, 30), tree: bare, claims: [], spent: { ...spent, steps: { Lens: spend } } })
+      const top = text([rows.find(one => one.key === 'live:bar')!])
+      const bottom = text([rows.find(one => one.key === 'live:return')!])
+      const headRows = rows.map(one => text([one])).filter(plain => plain.includes('▶'))
+      expect([columns, calls, headRows.length]).toEqual([columns, calls, 1])
+      for (const one of rows.filter(row => row.key === 'live:bar' || row.key === 'live:return')) expect(rowWidth(one)).toBe(columns)
+      const head = headRows[0]!
+      if (columns < 13) {
+        expect([columns, calls, head.includes('victrix')]).toEqual([columns, calls, false])
+      } else if (head === top || head === bottom) {
+        expect([columns, calls, head.includes('victrix▶')]).toEqual([columns, calls, true])
+        if (head === bottom) seenBottom = true
+      } else {
+        expect([columns, calls, top.endsWith('victrix┓')]).toEqual([columns, calls, true])
+      }
+    }
+    if (columns >= 24) expect([columns, seenBottom]).toEqual([columns, true])
+  }
+})
+
 test('the path ahead is faint food every other cell along the top and bottom rows, anchored at the right corners, exact to the width', () => {
   for (const columns of [10, 11, 24, 25, 50, 51, 80]) {
     const rows = layout(manyInput(columns, 50))
@@ -346,14 +373,16 @@ test('the path ahead is faint food every other cell along the top and bottom row
       const plain = text([one])
       expect([columns, one.key, rowWidth(one)]).toEqual([columns, one.key, columns])
       expect(plain.at(-1)).toBe('·')
-      // Dots every other cell from the right corner inward; the cells between are spaces.
-      for (let col = columns - 1; col > 5; col -= 2) {
+      // Dots every other cell from the right corner inward; the cells between are spaces. On the top row the mark
+      // `victrix▶` and the clear cell after the head come first, once the pane is wide enough for the word (13 cells).
+      const hasMark = one.key === 'live:bar' && columns >= 13
+      for (let col = columns - 1; col > (hasMark ? 12 : 5); col -= 2) {
         expect([columns, one.key, col, plain[col]]).toEqual([columns, one.key, col, '·'])
         expect([columns, one.key, col - 1, plain[col - 1]]).toEqual([columns, one.key, col - 1, ' '])
       }
       for (const part of one.spans.filter(part => part.text === '·')) expect(part.paint).toBe('faint')
     }
-    expect(text([top]).startsWith('   ┗▶')).toBe(true)
+    expect(text([top]).startsWith(columns >= 13 ? '   ┗victrix▶' : '   ┗▶')).toBe(true)
   }
 })
 
@@ -368,8 +397,8 @@ test('as the head comes down the right edge it eats the food: body above it, the
     if (index < headAt) expect([one.key, rowWidth(one), plain.at(-1)]).toEqual([one.key, 50, '┃'])
     else if (index > headAt) expect([one.key, rowWidth(one), lastSpan(one)]).toEqual([one.key, 50, edgeOf(one)])
   }
-  // The body on the top row, the trail still ahead on the bottom row.
-  expect(text([rows.find(one => one.key === 'live:bar')!])).toMatch(/^   ┗━+┓$/)
+  // The body on the top row with the name waiting at its corner, the trail still ahead on the bottom row.
+  expect(text([rows.find(one => one.key === 'live:bar')!])).toMatch(/^   ┗━+victrix┓$/)
   expect(text([rows.find(one => one.key === 'live:return')!])).toMatch(/^   ( ?·)+$/)
 })
 

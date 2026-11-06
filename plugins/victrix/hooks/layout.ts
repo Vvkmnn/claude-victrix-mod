@@ -22,6 +22,7 @@ import * as draw from './draw'
 import { factsOf } from './fit'
 import { GLYPH, meet, stepStatus } from './lattice'
 import { nowItem } from './plan'
+import { MARK_NAME } from './ui'
 
 /** What a span means; the lens maps each to a colour: live is Anthropic's orange, math the theme's calm accent, the rest the person's theme. */
 export type Paint = 'live' | 'math' | 'good' | 'bad' | 'text' | 'dim' | 'faint'
@@ -425,7 +426,28 @@ const loopRows = (live: PlanItem, facts: readonly Claim[], calls: number, column
   const topLen = Math.max(1, right - SPINE_COL)
   const bottomLen = Math.max(1, right - SPINE_COL + 1)
   const total = topLen + inner.length + bottomLen
-  const at = Math.min(total - 1, Math.floor(headFraction(live, facts, calls) * (total - 1)))
+  const progress = Math.min(total - 1, Math.floor(headFraction(live, facts, calls) * (total - 1)))
+  // The mark rides with the head as one unit, `victrix▶`, never cut (owner, 2026-11-07). On the top run the name is
+  // the body just behind the head; on the bottom run, where the head goes left, the unit reads the same way and its
+  // letters cover the trail ahead; down the right edge the name waits at the top corner while the bare head descends.
+  // A run's end leaves no room behind, so there the head is drawn at most `nameCells` cells off where progress puts
+  // it, and a pane too narrow for the unit shows the bare head.
+  const nameCells = draw.cells(MARK_NAME)
+  const hasRoom = right - SPINE_COL - 1 >= nameCells + 1
+  const bottomStart = topLen + inner.length
+  const at = !hasRoom
+    ? progress
+    : progress < topLen
+      ? Math.min(topLen - 1, Math.max(progress, nameCells))
+      : progress >= bottomStart
+        ? Math.min(progress, bottomStart + (right - SPINE_COL - 1 - nameCells))
+        : progress
+  const headCol = at < topLen ? SPINE_COL + 1 + at : at >= bottomStart ? right - (at - bottomStart) : right
+  const nameFrom = at < topLen || at >= bottomStart ? headCol - nameCells : right - nameCells
+  const nameOnTop = at < bottomStart
+  /** The letter of the name drawn at a column of the top (or bottom) run, if the name is there. */
+  const letterAt = (col: number, onTop: boolean): Span | null =>
+    hasRoom && onTop === nameOnTop && col >= nameFrom && col < nameFrom + nameCells ? span(Array.from(MARK_NAME)[col - nameFrom] ?? '', 'text') : null
   const cell = (index: number, body: string): Span | null => (index < at ? span(body, 'live') : index === at ? span(draw.MARK.head, 'live', true) : null)
   // Ahead of the head the whole loop is marked with faint food (owner: around the entire hairpin, subtly, equidistant):
   // every other cell along the top and bottom rows and every row down the side, which the eye reads as one spacing
@@ -435,7 +457,7 @@ const loopRows = (live: PlanItem, facts: readonly Claim[], calls: number, column
   const onPath = (col: number, index: number): Span => ((right - col) % 2 === 0 && index !== at + 1 ? pathFood : gapSpan(1))
   const topCells = Array.from({ length: right - SPINE_COL }, (_, offset) => {
     const col = SPINE_COL + 1 + offset
-    return cell(offset, col === right ? '┓' : '━') ?? onPath(col, offset)
+    return letterAt(col, true) ?? cell(offset, col === right ? '┓' : '━') ?? onPath(col, offset)
   })
   const top = row('live:bar', [gapSpan(SPINE_COL), span('┗', 'text'), ...topCells], columns)
   // The rows the snake only passes (titles, the meet, folds, gaps) carry the faint trail dot.
@@ -447,7 +469,7 @@ const loopRows = (live: PlanItem, facts: readonly Claim[], calls: number, column
   const bottomCells = Array.from({ length: right - SPINE_COL + 1 }, (_, offset) => {
     const col = SPINE_COL + offset
     const index = topLen + inner.length + (right - col)
-    return cell(index, col === right ? '┛' : col === SPINE_COL ? '┏' : '━') ?? onPath(col, index)
+    return letterAt(col, false) ?? cell(index, col === right ? '┛' : col === SPINE_COL ? '┏' : '━') ?? onPath(col, index)
   })
   const bottom = row('live:return', [gapSpan(SPINE_COL), ...bottomCells], columns)
   return [top, ...sides, bottom]
@@ -568,7 +590,16 @@ const bareBoard = (input: LayoutInput, columns: number, height: number): LayoutR
   // No face: while a plan is written the snake creeps in from the right edge along the top row toward its corner;
   // with no plan at all the top row is empty and the second says so.
   const creep = input.isPlanning ? creepCells(calls, columns - SPINE_COL - 1) : 0
-  const tail: Span[] = creep > 0 ? [gapSpan(columns - creep), span(draw.MARK.head, 'live', true), span('━'.repeat(creep - 1), 'text')] : []
+  // The creeping tail carries the mark too, `victrix▶` ahead of its body, while the row has room for the word.
+  const markRoom = columns - creep - draw.cells(MARK_NAME)
+  const tail: Span[] =
+    creep > 0
+      ? [
+          ...(markRoom >= 0 ? [gapSpan(markRoom), span(MARK_NAME, 'text')] : [gapSpan(columns - creep)]),
+          span(draw.MARK.head, 'live', true),
+          span('━'.repeat(creep - 1), 'text'),
+        ]
+      : []
   const first = input.spent.last.reduce<number | undefined>((least, line) => (line.at === undefined ? least : Math.min(least ?? line.at, line.at)), undefined)
   const body: LayoutRow[] = [
     tail.length > 0 ? row('box:top', tail, columns) : blank('box:top'),
@@ -657,7 +688,7 @@ export const layout = (input: LayoutInput): LayoutRow[] => {
       ...(b.doneFoldRow ? [row('done:more', [gapSpan(SPINE_COL), span('┃', 'text'), span(`   … ${b.doneFolded}${columns >= 24 ? ' done' : ''}`, 'dim')], columns)] : []),
       ...planRows(done.slice(done.length - b.done), live),
       ...(live ? loopRows(live, liveFacts, liveSpend?.calls ?? 0, columns, inner) : []),
-      ...(landed ? [row('live:rest', [gapSpan(SPINE_COL), span(draw.MARK.head, 'live', true)], columns)] : []),
+      ...(landed ? [row('live:rest', [gapSpan(SPINE_COL), span(MARK_NAME, 'text'), span(draw.MARK.head, 'live', true)], columns)] : []),
       ...(b.open > 0 ? openRows(open, b, input, columns) : []),
       ...(live ? [] : inner.length > 0 ? [blank('gap:proof'), ...inner] : []),
     ]
