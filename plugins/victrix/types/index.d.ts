@@ -71,6 +71,8 @@ export type PlanSection = { readonly title: string; readonly items: readonly Pla
 export type PlanTree = {
   readonly title: string | undefined
   readonly progress: string | undefined
+  /** The step the progress line names after `Active:` (its first bold run, else its words up to `(` `,` `;` `|`). */
+  readonly active?: string
   /** The first paragraph under `## Summary` (or `## Context`): what the plan is for, in the plan's words. */
   readonly summary: string | undefined
   readonly sections: readonly PlanSection[]

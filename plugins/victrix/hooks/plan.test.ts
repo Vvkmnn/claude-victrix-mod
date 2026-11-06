@@ -95,6 +95,50 @@ test('now falls back to the first open item anywhere when In Progress is missing
   expect(nowItem(parsePlan(plan))?.name).toBe('b')
 })
 
+// The step the plan itself names on its progress line wins (most plans keep no In Progress heading). The lines below
+// are shaped like the owner's real plans of 2026-11-06.
+const activePlan = (progress: string) =>
+  [
+    '# A plan',
+    progress,
+    '## Rolling builds',
+    '- [x] **L0 Land** — done',
+    '- [ ] **L1 Meet reality** — the Mac list',
+    '- [ ] **L4f The face, integrated (owner, 2026-11-05)** — next demo',
+    '- [ ] **Her space on the Mac, second pass (owner, 2026-11-06)** — goal: double-click her',
+    '- [ ] **W9 The guard only blocks a Claude that is really running elsewhere** — fix',
+    '- [ ] **V Closed verification loop** — frames',
+    '- [ ] **Hermes notes** — later',
+  ].join('\n')
+
+test('now is the open step the progress line names Active, even with no In Progress heading', () => {
+  const named = (progress: string) => nowItem(parsePlan(activePlan(progress)))?.name
+  // A bold name the step's own name starts with.
+  expect(named('**Progress: 3/9 done** | Active: **Her space on the Mac, second pass** (research pending)')).toBe('Her space on the Mac, second pass (owner, 2026-11-06)')
+  // The same step code, the words after it differing.
+  expect(named('**Progress: 13/15 done** | Active: **W9 the guard blocked its own pane** (failed 20:07), then W7')).toBe('W9 The guard only blocks a Claude that is really running elsewhere')
+  // No bold: the words up to the first bracket, comma, semicolon or bar.
+  expect(named('**Progress: 3/9 done** | Active: L4f the Mac face demo (next), then L9 iPhone')).toBe('L4f The face, integrated (owner, 2026-11-05)')
+  expect(named('**Progress: 1/9 done** | Active: **V the verification loop**, then **D one design system**')).toBe('V Closed verification loop')
+  // A numbered step: `14 verify…` is `14. On arrival…`, the dot aside.
+  const numbered = ['**Progress: 13/15 done** | Active: 14 verify the M5 on arrival, 15 sell the M3', '## Steps', '- [x] **13. Outcome**', '- [ ] **6. (Later) Watch mode**', '- [ ] **14. On arrival: verify the M5**'].join('\n')
+  expect(nowItem(parsePlan(numbered))?.name).toBe('14. On arrival: verify the M5')
+  // The exact name, case aside.
+  expect(named('**Progress: 1/7 done** | Active: **l1 meet reality**')).toBe('L1 Meet reality')
+})
+
+test('a word is not a step code: Active "Her…" never picks another step that merely starts with Her', () => {
+  expect(nowItem(parsePlan(activePlan('**Progress: 1/7 done** | Active: **Hermes is next**')))?.name).toBe('L1 Meet reality')
+})
+
+test('an Active step that is done, or names nothing in the plan, falls back to the old rule', () => {
+  expect(nowItem(parsePlan(activePlan('**Progress: 1/7 done** | Active: **L0 Land**')))?.name).toBe('L1 Meet reality')
+  expect(nowItem(parsePlan(activePlan('**Progress: 1/7 done** | Active: **Z9 nothing like it**')))?.name).toBe('L1 Meet reality')
+  expect(nowItem(parsePlan(activePlan('**Progress: 1/7 done**')))?.name).toBe('L1 Meet reality')
+  expect(parsePlan(activePlan('**Progress: 1/7 done** | Active: **W9 x**')).active).toBe('W9 x')
+  expect(parsePlan(activePlan('**Progress: 1/7 done**')).active).toBeUndefined()
+})
+
 test('now is undefined when every item is done or abandoned', () => {
   const plan = ['## Done', '- [x] **a**', '- [x] ~~**b**~~ — dropped'].join('\n')
 

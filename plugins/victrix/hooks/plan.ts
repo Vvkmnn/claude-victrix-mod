@@ -8,6 +8,11 @@ const CHECKBOX = /^(\s*)[-*]\s+\[([ xX])\]\s+(.*)$/
 const SECTION = /^##\s+(.+?)\s*$/
 const TITLE = /^#\s+(.+?)\s*$/
 const PROGRESS = /^\*\*Progress:\s*(.+?)\*\*/
+// The progress line's `Active:` step: its first bold run, else its words up to a bracket, comma, semicolon or bar.
+const ACTIVE = /\bActive:\s*(?:\*\*(.+?)\*\*|([^(,;|*]+))/
+// A step code (`V`, `R2`, `L4f`, `W9`, `14.`): capitals with optional digits and one lowercase letter after them, or a
+// step number with its dot. A plain word (`Her`) is not one, so steps that merely start alike never match.
+const STEP_CODE = /^(?:[A-Z]{1,3}(?:\d+[a-z]?)?|\d+\.?)$/
 const TAG = /^(why|because|trade|judge|verify|assume[sd]?|facts?|guard|options?|slow):\s*(.*)$/i
 // A fact line may name where it came from: `data: ids are dense`, `you: prices are in cents`.
 const SOURCE = /^(data|code|you|claude):\s*(.*)$/i
@@ -103,6 +108,9 @@ export const parsePlan = (markdown: string): PlanTree => {
   const lines = markdown.split(/\r?\n/)
   const title = lines.map(text => TITLE.exec(text)?.[1]).find(Boolean)
   const progress = lines.map(text => PROGRESS.exec(text)?.[1]?.trim()).find(Boolean)
+  const progressLine = lines.find(text => PROGRESS.test(text))
+  const activeMatch = progressLine ? ACTIVE.exec(progressLine) : null
+  const active = (activeMatch?.[1] ?? activeMatch?.[2])?.trim() || undefined
 
   const drafts = lines.reduce<Draft[]>((acc, text, index) => {
     const heading = SECTION.exec(text)?.[1]
@@ -118,6 +126,7 @@ export const parsePlan = (markdown: string): PlanTree => {
   return {
     title,
     progress,
+    ...(active ? { active } : {}),
     summary: summaryOf(drafts),
     sections: drafts
       .filter(draft => draft.rows.length > 0)
@@ -132,11 +141,37 @@ const allItems = (tree: PlanTree): PlanItem[] => {
   return tree.sections.flatMap(section => section.items.flatMap(walk))
 }
 
-/** The item being worked: the first open item under "In Progress", else the first open item anywhere. */
+/**
+ * The open item the progress line names `Active`, matched in three passes, the first that finds one winning: the exact
+ * name; then the same step code (`W9 the guard…` is `W9 The guard only…`); then either name starting with the other
+ * (`Her space on the Mac, second pass` is `Her space on the Mac, second pass (owner, …)`). Case aside throughout.
+ */
+const activeItem = (tree: PlanTree): PlanItem | undefined => {
+  const named = tree.active?.toLowerCase()
+  if (!named) return undefined
+  const open = allItems(tree).filter(isOpenItem)
+  const lower = (item: PlanItem) => item.name.toLowerCase()
+  const codeOf = (words: string) => {
+    const first = words.split(/\s+/)[0] ?? ''
+    return STEP_CODE.test(first) ? first.replace(/\.$/, '').toLowerCase() : undefined
+  }
+  const code = codeOf(tree.active ?? '')
+  return (
+    open.find(item => lower(item) === named) ??
+    (code ? open.find(item => codeOf(item.name) === code) : undefined) ??
+    open.find(item => lower(item).startsWith(named) || named.startsWith(lower(item)))
+  )
+}
+
+/**
+ * The item being worked: the open step the plan names `Active` on its progress line, else the first open item under
+ * "In Progress", else the first open item anywhere. Most plans keep no In Progress heading (7 of the owner's 8 newest,
+ * 2026-11-06), and the first open box from the top is then often a step left behind, not the one being worked.
+ */
 export const nowItem = (tree: PlanTree): PlanItem | undefined => {
   const inProgress = tree.sections.find(section => /in progress/i.test(section.title))
 
-  return inProgress?.items.find(isOpenItem) ?? tree.sections.flatMap(section => section.items).find(isOpenItem)
+  return activeItem(tree) ?? inProgress?.items.find(isOpenItem) ?? tree.sections.flatMap(section => section.items).find(isOpenItem)
 }
 
 export type Tally = { readonly done: number; readonly open: number; readonly abandoned: number; readonly assumed: number }
