@@ -4,14 +4,14 @@
     "name": "vvkmnn"
   },
   "metadata": {
-    "description": "Vada: follow and steer Claude's plan live, with maths behind the parts that matter",
-    "version": "0.3.0"
+    "description": "Victrix: follow and steer Claude's plan live, with maths behind the parts that matter",
+    "version": "0.4.0-beta.1"
   },
   "plugins": [
     {
       "name": "victrix",
       "description": "A live plan lens for Claude Code: where Claude is, what it just did, and the assumptions that would change the plan",
-      "version": "0.3.0",
+      "version": "0.4.0-beta.1",
       "source": "./plugins/victrix",
       "author": {
         "name": "vvkmnn"
