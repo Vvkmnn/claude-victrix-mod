@@ -1,10 +1,11 @@
 // Which size Victrix takes, and how wide the pane asks to be. Three sizes of one drawing (owner, 2026-11-07): the
-// pane beside the chat, the row above the prompt, and hidden, which is still one short snake row naming its key, so
-// Victrix never disappears for good. `s` moves through them in that order. Pure; no `$`.
+// pane beside the chat (inline above the prompt where the surface is narrow), the row above the prompt, and hidden,
+// one short snake row that still names its key, so Victrix never disappears for good. `s` moves through them in that
+// order, for the session only: every session starts at the pane, the largest. Pure; no `$`.
 
 export type Size = 'pane' | 'row' | 'hidden'
 
-/** The person's standing choice: a size, or `auto` to let the moment decide (the pane where it seats, else the row). */
+/** The person's choice this session: a size, or `auto` (the pane, until they press `s` or close it). */
 export type SizeChoice = Size | 'auto'
 
 export const SIZES: readonly Size[] = ['pane', 'row', 'hidden']
@@ -14,32 +15,21 @@ export type Moment = {
   readonly isPlanMode: boolean
   /** An engine dialog (plan approval, a question) is up: the engine narrows the pane itself; the pane stays the pane. */
   readonly isDialogUp: boolean
-  /** The surface can seat a pane at all (wide enough, fullscreen); false gives the row. */
-  readonly canDock: boolean
 }
 
-/** Hidden whenever chosen; otherwise the pane where one can seat, unless the row was chosen; the row when none can. */
-export const chooseSize = (moment: Moment): Size => {
-  if (moment.choice === 'hidden') return 'hidden'
-  if (!moment.canDock) return 'row'
-  return moment.choice === 'row' ? 'row' : 'pane'
-}
+/**
+ * Always the full pane unless the person chose the row or hidden with `s` (owner, 2026-11-07: "always start in full
+ * mode, small only when I ask for it"). Width never picks the row: a narrow surface seats the pane inline above the
+ * prompt, and only an engine that seats no pane at all leaves the row, as its fallback (the band draws while no pane
+ * of ours is placed).
+ */
+export const chooseSize = (moment: Moment): Size => (moment.choice === 'hidden' ? 'hidden' : moment.choice === 'row' ? 'row' : 'pane')
 
 /** The size `s` moves to: pane, row, hidden, then the pane again. */
 export const nextSize = (size: Size): Size => SIZES[(SIZES.indexOf(size) + 1) % SIZES.length] ?? 'pane'
 
-/** Names kept by versions before the rename (0.3.0 and earlier stored `third` and `tape`). */
-const LEGACY: Readonly<Record<string, SizeChoice>> = { third: 'pane', tape: 'row' }
-
-/** A stored value as a size choice: today's names, the old names read as their new ones, anything else undefined. */
-export const sizeChoiceOf = (value: unknown): SizeChoice | undefined => {
-  if (typeof value !== 'string') return undefined
-  if (value === 'auto' || (SIZES as readonly string[]).includes(value)) return value as SizeChoice
-  return LEGACY[value]
-}
-
-/** The engine seats an unasked pane from 144 columns (110 once asked); a docked body is at least 24 and at most 45% wide. */
-export const DOCK_MIN_COLUMNS = 110
+// The engine docks an unasked pane from 144 columns (110 once asked) and seats it inline above the prompt below
+// that; a docked body is at least 24 and at most 45% wide.
 const DOCK_FLOOR = 24
 const DOCK_CEILING = 0.45
 

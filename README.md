@@ -48,10 +48,10 @@ The pane asks for 27% of the terminal. The engine keeps a width you dragged over
 
 - Full screen on a 13" or 14" MacBook (about 186 to 200 columns): a pane of 50 to 54 columns.
 - Full screen on a 15" or 16" (about 218 to 240 columns): 59 to 65 columns.
-- Half screen or any tmux split (about 92 to 120 columns): under 110 columns no pane seats and the row above the prompt carries the plan; at 110 to 120 a 30 to 32 column pane.
-- A fresh Terminal.app window (80 by 24): the row, until you maximise it.
+- Half screen, any tmux split, or the Claude desktop app's narrow layout: the pane seats inline above the prompt, still the full pane.
+- A fresh Terminal.app window (80 by 24): the pane, inline above the prompt.
 
-Three sizes of the same snake: the **pane**, the **row** above the prompt (`━━victrix▶━━ 3/8  step … h: ? keys`), and **hidden**, a short snake that still names its key. `s` moves between them.
+Three sizes of the same snake: the **pane**, the **row** above the prompt (`━━victrix▶━━ 3/8  step … h: ? keys`), and **hidden**, a short snake that still names its key. Every session starts at the pane, the largest; `s` moves between them for that session only, and nothing about size is remembered.
 
 ## Install
 
@@ -60,7 +60,7 @@ Three sizes of the same snake: the **pane**, the **row** above the prompt (`━�
 /plugin install victrix@claude-victrix-mod
 ```
 
-The beta (0.4.0-beta.1: the snake head `victrix▶` on every size, `s` for size, one key card, the plan's `Active:` step lit):
+The beta (0.4.0-beta.2: the snake head `victrix▶` on every size, `s` for size, one key card, the plan's `Active:` step lit):
 
 ```
 /plugin marketplace add Vvkmnn/claude-victrix-mod#beta

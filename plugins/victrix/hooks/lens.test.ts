@@ -181,18 +181,19 @@ for (const surface of SURFACES) {
     expect(world.opened).toEqual([{ id: 'victrix', title: 'victrix', backgroundColor: 'transparent' }])
   })
 
-  test(`${surface}: a dock the person hid stays hidden at the next session start`, async ($, on) => {
-    const world = beneath(on, { store: { [`victrix.hidden:${CWD}`]: true } })
+  test(`${surface}: every session starts at the pane, the largest, whatever an earlier version stored`, async ($, on) => {
+    const world = beneath(on, { store: { [`victrix.hidden:${CWD}`]: true, 'victrix.form': 'tape' } })
     await $.session.start(START)
-    expect(world.opened).toEqual([])
+    expect(world.opened.at(-1)?.id).toBe('victrix')
   })
 
-  test(`${surface}: /victrix opens the dock focused, clears the hide, and says so`, async ($, on) => {
-    const world = beneath(on, { store: { [`victrix.hidden:${CWD}`]: true } })
+  test(`${surface}: /victrix opens the pane focused and says so, even after the person chose the row`, async ($, on) => {
+    const world = beneath(on)
     await $.session.start(START)
+    const pane = await mountPane($)
+    await pane.press({ key: 'k:q' })
     const answer = await $.command.run(RUN)
     expect(answer).toMatchObject({ text: 'Victrix opened.' })
-    expect(world.store[`victrix.hidden:${CWD}`]).toBeUndefined()
     expect(world.opened.at(-1)).toMatchObject({ id: 'victrix', focus: true })
   })
 
@@ -206,13 +207,16 @@ for (const surface of SURFACES) {
     expect(world.opened.at(-1)?.columns).toBe(43)
   })
 
-  test(`${surface}: q hides the dock and keeps it hidden`, async ($, on) => {
-    const world = beneath(on)
+  test(`${surface}: q hides the pane for this session only: the row stays, a mode change does not reopen it, nothing is stored`, async ($, on) => {
+    const world = beneath(on, { files: { [PATH]: PLAN } })
     await $.session.start(START)
     const pane = await mountPane($)
+    const opens = world.opened.length
     await pane.press({ key: 'k:q' })
     expect(world.closed).toEqual([expect.objectContaining({ id: 'victrix' })])
-    expect(world.store[`victrix.hidden:${CWD}`]).toBe(true)
+    await $.prompt.attachment(planNote(PATH))
+    expect(world.opened.length).toBe(opens)
+    expect(Object.keys(world.store).filter(key => key.startsWith('victrix.hidden') || key === 'victrix.form')).toEqual([])
   })
 
   // The plan on the trunk
@@ -652,13 +656,23 @@ for (const surface of SURFACES) {
 
   // Sizes: pane, row, hidden; `s` moves through them from what is on screen
 
+  test(`${surface}: a pane seated inline above the prompt (a narrow surface) is still the full pane, never the row`, async ($, on) => {
+    beneath(on, { files: { [PATH]: PLAN } })
+    await $.session.start(START)
+    await $.prompt.attachment(planNote(PATH))
+    const inline = await $.ui.mount({ plugin: 'victrix', surface, component: 'Pane', requestId: 'victrix', props: { ...PANE_PROPS, placement: 'inline' } as unknown as typeof PANE_PROPS })
+    const drawn = await joined(inline)
+    expect(drawn).toContain('proof')
+    expect(drawn).toContain('steps')
+    expect(drawn).toContain('victrix')
+  })
+
   test(`${surface}: s from the row goes to hidden: the same snake, short, with victrix▶, its tally and the one key, no step`, async ($, on) => {
     const world = beneath(on, { files: { [PATH]: PLAN }, placed: false })
     await $.session.start(START)
     await $.prompt.attachment(planNote(PATH))
     const band = await mountBand($)
     await band.press({ key: 'k:s' })
-    expect(world.store['victrix.form']).toBe('hidden')
     const texts = await textsOf(band)
     expect(texts).toContain('victrix')
     expect(texts.some(text => /^Lens/.test(text))).toBe(false)
@@ -666,26 +680,25 @@ for (const surface of SURFACES) {
     expect(labels).toContain('? keys')
     const rows = await rowsOf(band, BAND_PROPS.bodyColumns)
     expect(rows[0]).toContain('victrix▶')
+    expect(world.store['victrix.form']).toBeUndefined()
   })
 
-  test(`${surface}: s from hidden opens the pane again and forgets a close the person made`, async ($, on) => {
-    const world = beneath(on, { files: { [PATH]: PLAN }, store: { 'victrix.form': 'hidden', [`victrix.hidden:${CWD}`]: true } })
+  test(`${surface}: s goes round pane, row, hidden and back to the pane, opening it again`, async ($, on) => {
+    const world = beneath(on, { files: { [PATH]: PLAN } })
     await $.session.start(START)
     await $.prompt.attachment(planNote(PATH))
-    expect(world.opened).toEqual([])
     const band = await mountBand($)
+    const pane = await mountPane($)
+    await pane.press({ key: 'k:s' })
+    expect(world.closed.at(-1)).toMatchObject({ id: 'victrix' })
+    const opens = world.opened.length
     await band.press({ key: 'k:s' })
-    expect(world.store['victrix.form']).toBe('pane')
-    expect(world.store[`victrix.hidden:${CWD}`]).toBeUndefined()
+    expect(world.opened.length).toBe(opens)
+    await band.press({ key: 'k:s' })
+    expect(world.opened.length).toBe(opens + 1)
     expect(world.opened.at(-1)?.id).toBe('victrix')
   })
 
-  test(`${surface}: a size stored by 0.3.0 reads by its new name: tape is the row, so no pane opens`, async ($, on) => {
-    const world = beneath(on, { files: { [PATH]: PLAN }, store: { 'victrix.form': 'tape' } })
-    await $.session.start(START)
-    await $.prompt.attachment(planNote(PATH))
-    expect(world.opened).toEqual([])
-  })
 
   test(`${surface}: the row's ? keys lists every row key as a labelled button; the pane's own explain and hide are not offered`, async ($, on) => {
     beneath(on, { files: { [PATH]: PLAN }, placed: false })

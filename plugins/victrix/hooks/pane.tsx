@@ -11,10 +11,9 @@ import { factsOf } from './fit'
 import { GLYPH, MEANING, label as claimLabel, stepStatus, weakest } from './lattice'
 import { LIVE_COLOUR, layout, meetLine, shortClock, statusWord } from './layout'
 import type { LayoutRow, Paint, Press } from './layout'
-import { PANE, acceptEnglish, cycleSize, hiddenKey, loadPlan, pressVerb, verifyStep } from './lens'
+import { PANE, acceptEnglish, cycleSize, hidePane, loadPlan, pressVerb, verifyStep } from './lens'
 import { VERBS } from './notes'
 import { itemNamed, nowItem } from './plan'
-import { drawTape } from './tape'
 import { HEAD, keysOn } from './ui'
 import type { KeyAction } from './ui'
 
@@ -52,9 +51,8 @@ const parseCard = (key: string): { readonly step: string; readonly fact?: number
 
 export const registerPane = (on: On) => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    // Seated inline (no dock fits), the pane is the small form: the one row; the ask row stays the band's, so the
-    // digits are mounted once.
-    if (e.props.placement === 'inline') return drawTape($, e, Math.max(20, e.props.bodyColumns), 'rest', Date.now())
+    // Seated inline (a narrow surface, the desktop app's layout), the pane is still the full pane: the row is only
+    // ever the person's choice (`s`), never the width's (owner, 2026-11-07). The ask row stays the band's either way.
     const { Box, Button, Text } = $.ui.resolve(e)
     const view = await read($, plan)
     const tree = view?.tree ?? null
@@ -73,10 +71,7 @@ export const registerPane = (on: On) => {
     const key = (letter: string) => (isFocused ? { hotkey: letter } : {})
 
     const toggleCard = (name: string) => update($, openedCard, current => (current === name ? null : name))
-    const hide = async () => {
-      await $.store.set(hiddenKey(await read($, cwd)), true)
-      await $.ui.close({ id: PANE })
-    }
+    const hide = () => hidePane($)
     const press = (what: Press) => async () => {
       if (what.kind === 'help') return toggleCard('help')
       if (what.kind === 'plan') return loadPlan($, what.path, 'person')

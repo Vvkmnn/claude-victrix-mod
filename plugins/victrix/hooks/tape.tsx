@@ -59,11 +59,10 @@ export const registerTape = (on: On) => {
 }
 
 /**
- * The one-row tape with its ask row (`full`), the row alone (`rest`, for a pane seated inline while the band keeps
- * the ask), or only the ask row above the prompt while the pane is placed (`ask`). `now` is read once by the caller
- * so the band and the pane draw the same second.
+ * The row with its ask row (`full`), or only the ask row above the prompt while the pane is placed (`ask`). `now` is
+ * read once by the caller so the band and the pane draw the same second.
  */
-export async function drawTape($: Dollar, e: TapeSite, room: number, mode: 'full' | 'rest' | 'ask' = 'full', now: number = Date.now()) {
+export async function drawTape($: Dollar, e: TapeSite, room: number, mode: 'full' | 'ask' = 'full', now: number = Date.now()) {
     const { Box, Button, Text } = $.ui.resolve(e)
     const view = await read($, plan)
     const tree = view?.tree ?? null

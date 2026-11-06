@@ -10,7 +10,7 @@ import * as draw from './draw'
 import { runVerify } from './check'
 import { factKey, factsOf, fitRows, stepKey } from './fit'
 import type { MapRow } from './fit'
-import { DOCK_MIN_COLUMNS, chooseSize, dockColumns, nextSize, sizeChoiceOf } from './form'
+import { chooseSize, dockColumns, nextSize } from './form'
 import type { Size, SizeChoice } from './form'
 import { GLYPH, MEANING, label as claimLabel, proved, sameClaim, stepStatus, weakest } from './lattice'
 import { VERBS, appendLog, deliveryText, describeNote, logLine } from './notes'
@@ -64,10 +64,8 @@ const TICK_MS = 125
 
 // Per repo, so two repos never overwrite each other's choice or ledger.
 const planPathKey = (dir: string) => `victrix.planPath:${dir}`
-export const hiddenKey = (dir: string) => `victrix.hidden:${dir}`
 const logKey = (dir: string) => `victrix.log:${dir}`
 const askedKey = (dir: string) => `victrix.asked:${dir}`
-const FORM_KEY = 'victrix.form'
 /** The terminal's width as last reported by a drawing, kept per machine so a new session can ask for a quarter at once. */
 const COLUMNS_KEY = 'victrix.columns'
 
@@ -317,13 +315,11 @@ export async function currentSize($: Dollar): Promise<Size> {
     choice: await read($, sizeChoice),
     isPlanMode: await read($, isPlanMode),
     isDialogUp: await read($, isDialogUp),
-    canDock: columns === 0 || columns >= DOCK_MIN_COLUMNS,
   })
 }
 
 // One drawing, one size at a time: the pane opens at its width, or closes so the row (or the hidden row) can draw.
 async function reconcileForm($: Dollar, how: 'asked' | 'unasked') {
-  if (how === 'unasked' && (await $.store.get(hiddenKey(await read($, cwd)))) === true) return
   const size = await currentSize($)
   if (size !== 'pane') {
     if (await read($, isPlaced)) await $.ui.close({ id: PANE })
@@ -343,8 +339,8 @@ async function reconcileForm($: Dollar, how: 'asked' | 'unasked') {
 }
 
 /**
- * `s`, from any size: the next of pane, row, hidden, kept across sessions. Choosing the pane also clears a close the
- * person made, so the key always gets them back to it.
+ * `s`, from any size: the next of pane, row, hidden, for this session only; every session starts at the pane, the
+ * largest (owner, 2026-11-07: "default to largest mode always").
  */
 export async function cycleSize($: Dollar) {
   // From what is on screen, not what was asked: a pane the engine would not seat shows as the row, and `s` must
@@ -353,8 +349,12 @@ export async function cycleSize($: Dollar) {
   const shown = size === 'pane' && !(await read($, isPlaced)) ? 'row' : size
   const next = nextSize(shown)
   await update($, sizeChoice, () => next)
-  await $.store.set(FORM_KEY, next)
-  if (next === 'pane') await $.store.delete(hiddenKey(await read($, cwd)))
+  await reconcileForm($, 'asked')
+}
+
+/** `q`: the pane goes, the row stays, for the rest of this session only. */
+export async function hidePane($: Dollar) {
+  await update($, sizeChoice, () => 'row')
   await reconcileForm($, 'asked')
 }
 
@@ -616,9 +616,6 @@ export const registerLens = (on: On, motion = true, review = true) => {
   on('session.start', async ($, e, next) => {
     await update($, cwd, () => e.cwd)
     await update($, surface, () => e.surface)
-    // Names from before the rename read as their new ones; anything unknown (an old `strip`) is no choice at all.
-    const choice = sizeChoiceOf(await $.store.get(FORM_KEY))
-    if (choice !== undefined) await update($, sizeChoice, () => choice)
     const kept = await $.store.get(COLUMNS_KEY).catch(() => undefined)
     if (typeof kept === 'number' && kept > 0) await update($, viewportColumns, value => (value === 0 ? kept : value))
     await $.command.register({
@@ -641,26 +638,21 @@ export const registerLens = (on: On, motion = true, review = true) => {
     if (named !== '') await loadPlan($, resolvePath(dir, named), 'person')
     else if (current) await loadPlan($, current.path, 'person')
     else await refreshRecent($)
-    await $.store.delete(hiddenKey(dir))
+    await update($, sizeChoice, () => 'auto')
     await update($, viewportColumns, value => (value === 0 ? e.presentation.columns : value))
     // The one moment the engine tells the mod the terminal's width: kept per machine so later sessions ask for a quarter at once.
     if (e.presentation.columns > 0) await $.store.set(COLUMNS_KEY, e.presentation.columns).catch(() => undefined)
-    // Too narrow for a dock: a pane asked for here would be seated inline, framed, above the prompt. The small form
-    // is the band's one row instead, which draws while no pane of ours is placed.
-    if (e.presentation.columns > 0 && e.presentation.columns < DOCK_MIN_COLUMNS) {
-      if (await read($, isPlaced)) await $.ui.close({ id: PANE })
-      await update($, isPlaced, () => false)
-      return { text: 'Victrix: the row above the prompt; the map docks from 110 columns.' }
-    }
+    // Always the full pane, at any width: a narrow surface seats it inline above the prompt (owner, 2026-11-07).
     await reconcileForm($, 'asked')
 
     return { text: 'Victrix opened.' }
   })
 
-  // A person's close (its mark or key) keeps the dock hidden across sessions until /victrix.
+  // A person's close (the engine's ✕ or ctrl+x x) is their choice of the row for the rest of this session, so a later
+  // mode change never reopens what they closed; the next session starts at the pane again (owner, 2026-11-07).
   on('ui.close', async ($, e, next) => {
     if (e.id === PANE && e.origin.kind === 'person') {
-      await $.store.set(hiddenKey(await read($, cwd)), true)
+      await update($, sizeChoice, () => 'row')
       await update($, isPlaced, () => false)
     }
     return next(e)
