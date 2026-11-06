@@ -29,7 +29,7 @@ const PLAN = [
 ].join('\n')
 
 const PANE_PROPS = {
-  title: '[-_-]',
+  title: 'victrix',
   isFocused: true,
   bodyColumns: 60,
   placement: 'dock',
@@ -178,7 +178,7 @@ for (const surface of SURFACES) {
     const world = beneath(on)
     await $.session.start(START)
     expect(world.registered).toEqual([expect.objectContaining({ name: 'victrix', description: expect.stringContaining('plan') })])
-    expect(world.opened).toEqual([{ id: 'victrix', title: '[-_-]', backgroundColor: 'transparent' }])
+    expect(world.opened).toEqual([{ id: 'victrix', title: 'victrix', backgroundColor: 'transparent' }])
   })
 
   test(`${surface}: a dock the person hid stays hidden at the next session start`, async ($, on) => {
@@ -599,7 +599,9 @@ for (const surface of SURFACES) {
     const after = await joined(pane)
     expect(after.split('Victrix').length - 1).toBe(1)
     expect(after).toContain('✗ ≤ ○ ≤ ■ ≤ ●')
-    expect(after).toContain('d doubt')
+    // Every key is a labelled button in the card, from the one table: by letter or by click.
+    const labels = (await pane.findAll({ type: 'Button' })).map(button => String(button.props.label ?? ''))
+    for (const words of ['size: pane, row, hidden', 'explain this step', 'doubt this step', 'add a fact', 'wrong path', 'hide the pane']) expect(labels).toContain(words)
     expect(after).toContain('Tao')
   })
 
@@ -648,16 +650,69 @@ for (const surface of SURFACES) {
     expect(world.opened.at(-1)?.columns).toBe(43)
   })
 
+  // Sizes: pane, row, hidden; `s` moves through them from what is on screen
+
+  test(`${surface}: s from the row goes to hidden: the same snake, short, with victrix▶, its tally and the one key, no step`, async ($, on) => {
+    const world = beneath(on, { files: { [PATH]: PLAN }, placed: false })
+    await $.session.start(START)
+    await $.prompt.attachment(planNote(PATH))
+    const band = await mountBand($)
+    await band.press({ key: 'k:s' })
+    expect(world.store['victrix.form']).toBe('hidden')
+    const texts = await textsOf(band)
+    expect(texts).toContain('victrix')
+    expect(texts.some(text => /^Lens/.test(text))).toBe(false)
+    const labels = (await band.findAll({ type: 'Button' })).map(button => String(button.props.label ?? ''))
+    expect(labels).toContain('? keys')
+    const rows = await rowsOf(band, BAND_PROPS.bodyColumns)
+    expect(rows[0]).toContain('victrix▶')
+  })
+
+  test(`${surface}: s from hidden opens the pane again and forgets a close the person made`, async ($, on) => {
+    const world = beneath(on, { files: { [PATH]: PLAN }, store: { 'victrix.form': 'hidden', [`victrix.hidden:${CWD}`]: true } })
+    await $.session.start(START)
+    await $.prompt.attachment(planNote(PATH))
+    expect(world.opened).toEqual([])
+    const band = await mountBand($)
+    await band.press({ key: 'k:s' })
+    expect(world.store['victrix.form']).toBe('pane')
+    expect(world.store[`victrix.hidden:${CWD}`]).toBeUndefined()
+    expect(world.opened.at(-1)?.id).toBe('victrix')
+  })
+
+  test(`${surface}: a size stored by 0.3.0 reads by its new name: tape is the row, so no pane opens`, async ($, on) => {
+    const world = beneath(on, { files: { [PATH]: PLAN }, store: { 'victrix.form': 'tape' } })
+    await $.session.start(START)
+    await $.prompt.attachment(planNote(PATH))
+    expect(world.opened).toEqual([])
+  })
+
+  test(`${surface}: the row's ? keys lists every row key as a labelled button; the pane's own explain and hide are not offered`, async ($, on) => {
+    beneath(on, { files: { [PATH]: PLAN }, placed: false })
+    await $.session.start(START)
+    await $.prompt.attachment(planNote(PATH))
+    const band = await mountBand($)
+    const closed = (await band.findAll({ type: 'Button' })).map(button => String(button.props.label ?? ''))
+    expect(closed.filter(label => label !== '' && label !== '? keys' && !/^(run the check|ask Claude to find out|not sure|I checked|you check|build it|not worth it)$/.test(label))).toEqual([])
+    await band.press({ key: 'keys' })
+    const labels = (await band.findAll({ type: 'Button' })).map(button => String(button.props.label ?? ''))
+    for (const words of ['size: pane, row, hidden', "run the step's check", 'doubt this step', 'add a fact', 'wrong path']) expect(labels).toContain(words)
+    expect(labels).not.toContain('explain this step')
+    expect(labels).not.toContain('hide the pane')
+  })
+
   // The tape
 
-  test(`${surface}: the tape draws only when no dock is placed, with the face, the lit step and the because line`, async ($, on) => {
+  test(`${surface}: the row draws only when no pane is placed, with the snake's head victrix▶, the lit step and the because line`, async ($, on) => {
     beneath(on, { files: { [PATH]: PLAN }, placed: false })
     await $.session.start(START)
     await $.prompt.attachment(planNote(PATH))
     const band = await mountBand($)
     const texts = await textsOf(band)
-    expect(texts).toContain('[-_-]')
-    expect(texts.some(text => /^▶ Lens \d+s$/.test(text))).toBe(true)
+    expect(texts).toContain('victrix')
+    expect(texts).not.toContain('[-_-]')
+    expect(texts.some(text => /^Lens \d+s$/.test(text))).toBe(true)
+    expect(texts.filter(text => text.includes('▶')).length).toBe(1)
     expect(texts).toContain('Claude assumed · prices are in cents · true?')
     expect(await joined(band)).toContain('because plans are hard to follow')
     const rows = await rowsOf(band, BAND_PROPS.bodyColumns)
@@ -673,7 +728,8 @@ for (const surface of SURFACES) {
       const band = await $.ui.mount({ plugin: 'victrix', surface, component: 'AbovePrompt', requestId: `victrix-${bodyColumns}`, props: { ...BAND_PROPS, bodyColumns } as typeof BAND_PROPS })
       const rows = await rowsOf(band, bodyColumns)
       expect(rows.length).toBe(1)
-      expect(rows[0]).toContain('▶ Lens')
+      expect(rows[0]).toContain('victrix▶')
+      expect(rows[0]).toContain('Lens')
       expect(Array.from(rows[0] ?? '').length).toBeLessThanOrEqual(bodyColumns)
     }
   })

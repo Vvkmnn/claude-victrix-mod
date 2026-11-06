@@ -176,11 +176,12 @@ test('the food of the tasks ahead sits in column 3 before the state box', () => 
   expect(food([broken])).toBe('bad')
 })
 
-test('the footer’s ? is the last cell and its parts drop whole', () => {
+test('the footer ends in the one key h: ? keys (h: ? under 30 columns) and its parts drop whole', () => {
   for (const columns of [10, 24, 40, 60, 100]) {
     const math = layout(input(columns, 30)).find(one => one.key === 'footer:math')!
     expect(rowWidth(math)).toBe(columns)
-    expect(math.spans.at(-1)?.text).toBe('?')
+    expect(math.spans.at(-1)?.text).toBe(columns >= 30 ? ': ? keys' : ': ?')
+    expect(math.spans.at(-2)?.text).toBe('h')
     expect(math.press?.kind).toBe('help')
   }
   const at = (columns: number) => text([layout(input(columns, 30)).find(one => one.key === 'footer:math')!])
@@ -189,7 +190,7 @@ test('the footer’s ? is the last cell and its parts drop whole', () => {
   expect(at(24)).toContain('t 47m')
   expect(at(24)).not.toContain('min')
   expect(at(10)).not.toContain('t 47m')
-  expect(at(10)).toMatch(/^Σ \S+ +\?$/)
+  expect(at(10)).toMatch(/^Σ \S+ +h: \?$/)
 })
 
 test('no plan: the bare face says so, the recent plans are offered as food, the footer stays', () => {

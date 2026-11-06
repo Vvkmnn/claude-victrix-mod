@@ -1,5 +1,5 @@
 // Began as the plan lens of github.com/Vvkmnn/claude-emporium (plugins/emporium/hooks/lens.tsx,
-// Oct 2026, same author); carried on here as the instrument: one trunk from the face through the plan.
+// Oct 2026, same author); carried on here as Victrix: one snake through the plan.
 import { atom, read, update } from 'claude-code'
 import type { CoreEngineInterface, Register, RenderChildren } from 'claude-code'
 
@@ -10,8 +10,8 @@ import * as draw from './draw'
 import { runVerify } from './check'
 import { factKey, factsOf, fitRows, stepKey } from './fit'
 import type { MapRow } from './fit'
-import { DOCK_MIN_COLUMNS, chooseForm, dockColumns } from './form'
-import type { Form, FormChoice } from './form'
+import { DOCK_MIN_COLUMNS, chooseSize, dockColumns, nextSize, sizeChoiceOf } from './form'
+import type { Size, SizeChoice } from './form'
 import { GLYPH, MEANING, label as claimLabel, proved, sameClaim, stepStatus, weakest } from './lattice'
 import { VERBS, appendLog, deliveryText, describeNote, logLine } from './notes'
 import { itemNamed, nowItem, parsePlan } from './plan'
@@ -23,7 +23,7 @@ export type Dollar = Pick<CoreEngineInterface, 'state' | 'fs' | 'store' | 'ui' |
 
 
 export const PANE = 'victrix'
-export const TITLE = '[-_-]'
+export const TITLE = 'victrix'
 
 // Atoms are declared in the file that reads them: the engine lists a module's state by scanning its own consts.
 const plan = atom({ plugin: 'victrix', key: 'plan' } as const, null as PlanView | null)
@@ -36,7 +36,7 @@ const notes = atom({ plugin: 'victrix', key: 'notes' } as const, [] as readonly 
 const pendingAdd = atom({ plugin: 'victrix', key: 'pendingAdd' } as const, null as string | null)
 const isWorking = atom({ plugin: 'victrix', key: 'isWorking' } as const, false)
 const claims = atom({ plugin: 'victrix', key: 'claims' } as const, [] as readonly Claim[])
-const formChoice = atom({ plugin: 'victrix', key: 'formChoice' } as const, 'auto' as FormChoice)
+const sizeChoice = atom({ plugin: 'victrix', key: 'sizeChoice' } as const, 'auto' as SizeChoice)
 const tick = atom({ plugin: 'victrix', key: 'tick' } as const, 0)
 const asking = atom({ plugin: 'victrix', key: 'asking' } as const, [] as readonly string[])
 const isDialogUp = atom({ plugin: 'victrix', key: 'isDialogUp' } as const, false)
@@ -310,22 +310,22 @@ async function refreshRecent($: Dollar) {
   await update($, recent, () => found)
 }
 
-/** The form the moment calls for, from the state the hooks keep. */
-async function currentForm($: Dollar): Promise<Form> {
+/** The size the moment calls for, from the state the hooks keep. */
+export async function currentSize($: Dollar): Promise<Size> {
   const columns = await read($, viewportColumns)
-  return chooseForm({
-    choice: await read($, formChoice),
+  return chooseSize({
+    choice: await read($, sizeChoice),
     isPlanMode: await read($, isPlanMode),
     isDialogUp: await read($, isDialogUp),
     canDock: columns === 0 || columns >= DOCK_MIN_COLUMNS,
   })
 }
 
-// One instrument, one form at a time: the dock opens at the form's width, or closes so the tape can draw.
+// One drawing, one size at a time: the pane opens at its width, or closes so the row (or the hidden row) can draw.
 async function reconcileForm($: Dollar, how: 'asked' | 'unasked') {
   if (how === 'unasked' && (await $.store.get(hiddenKey(await read($, cwd)))) === true) return
-  const form = await currentForm($)
-  if (form === 'tape') {
+  const size = await currentSize($)
+  if (size !== 'pane') {
     if (await read($, isPlaced)) await $.ui.close({ id: PANE })
     await update($, isPlaced, () => false)
     return
@@ -333,13 +333,29 @@ async function reconcileForm($: Dollar, how: 'asked' | 'unasked') {
   // The terminal's width is known only once `/victrix` has run (the session start carries none); until then the
   // map asks for no width and takes the engine's own share, instead of the 24-column floor a width of 0 would give.
   const viewport = await read($, viewportColumns)
-  const columns = viewport === 0 && form === 'third' ? undefined : dockColumns(form, viewport)
+  const columns = viewport === 0 ? undefined : dockColumns(viewport)
   // Transparent: the pane shows the person's own terminal background, never the engine's panel grey (owner, 2026-11-05).
   const args = { id: PANE, title: TITLE, backgroundColor: 'transparent' as const, ...(columns === undefined ? {} : { columns }), ...(how === 'asked' ? { focus: true as const } : {}) }
   // The width is a request: where the person has dragged the dock, the engine keeps that width over it.
   const opened = await $.ui.open(args)
   await update($, isPlaced, () => opened.isPlaced)
-  $.ui.log(`victrix: ${form} (${how}, ${columns ?? 'share'} cols): ${opened.isPlaced ? 'placed' : opened.reason}`, { to: 'debug' })
+  $.ui.log(`victrix: ${size} (${how}, ${columns ?? 'share'} cols): ${opened.isPlaced ? 'placed' : opened.reason}`, { to: 'debug' })
+}
+
+/**
+ * `s`, from any size: the next of pane, row, hidden, kept across sessions. Choosing the pane also clears a close the
+ * person made, so the key always gets them back to it.
+ */
+export async function cycleSize($: Dollar) {
+  // From what is on screen, not what was asked: a pane the engine would not seat shows as the row, and `s` must
+  // then go on to hidden, never stay on a row the person already sees.
+  const size = await currentSize($)
+  const shown = size === 'pane' && !(await read($, isPlaced)) ? 'row' : size
+  const next = nextSize(shown)
+  await update($, sizeChoice, () => next)
+  await $.store.set(FORM_KEY, next)
+  if (next === 'pane') await $.store.delete(hiddenKey(await read($, cwd)))
+  await reconcileForm($, 'asked')
 }
 
 // The ledger: one line per pressed verb, per repo, newest last, capped (see notes.ts).
@@ -526,18 +542,10 @@ const colourOf = (row: MapRow): Colour => {
   return undefined
 }
 
-/**
- * The face: `[-_-]` by default, `[o_o]` while a call runs, `[o_O]` only when something needs you or broke. While a
- * call runs the face breathes between the two at 0.2 Hz (2.5 s open, 2.5 s closed on the 125 ms tick), nothing faster.
- */
-const BREATH_TICKS = 20
-const faceOf = (isCalling: boolean, isWorried: boolean, tickNow = 0) =>
-  draw.face(isWorried ? 'worried' : isCalling && (!isMotion || Math.floor(tickNow / BREATH_TICKS) % 2 === 0) ? 'working' : 'idle')
-
 let ticker: { cancel: () => void } | undefined
 
 // The spinner's clock, terminal only; a host without a clock (the test kit) leaves the glyph still.
-// Alive while a turn runs: the clock on the lit step and the breathing face move once a second between calls, the
+// Alive while a turn runs: the clock on the lit step moves once a second between calls, the
 // spinner at TICK_MS during a call; nothing ticks while Claude is idle, so nothing moves while you type.
 const SLOW_MS = 1000
 let tickerMs = 0
@@ -608,9 +616,9 @@ export const registerLens = (on: On, motion = true, review = true) => {
   on('session.start', async ($, e, next) => {
     await update($, cwd, () => e.cwd)
     await update($, surface, () => e.surface)
-    const choice = await $.store.get(FORM_KEY)
-    // A `strip` kept by an earlier version reads as `auto`: that form no longer exists.
-    if (choice === 'tape' || choice === 'third' || choice === 'auto') await update($, formChoice, () => choice)
+    // Names from before the rename read as their new ones; anything unknown (an old `strip`) is no choice at all.
+    const choice = sizeChoiceOf(await $.store.get(FORM_KEY))
+    if (choice !== undefined) await update($, sizeChoice, () => choice)
     const kept = await $.store.get(COLUMNS_KEY).catch(() => undefined)
     if (typeof kept === 'number' && kept > 0) await update($, viewportColumns, value => (value === 0 ? kept : value))
     await $.command.register({

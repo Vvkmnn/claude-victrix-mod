@@ -82,7 +82,7 @@ const print = (name: string, columns: number, tree: Drawn) => {
   }
 }
 
-const paneProps = (columns: number, rows: number, isFocused = false) => ({ title: '[-_-]', isFocused, bodyColumns: columns, placement: 'dock', scroll: { offset: 0, bodyRows: rows }, view: {} }) as const
+const paneProps = (columns: number, rows: number, isFocused = false) => ({ title: 'victrix', isFocused, bodyColumns: columns, placement: 'dock', scroll: { offset: 0, bodyRows: rows }, view: {} }) as const
 
 const mountPane = ($: Engine, columns: number, rows: number, isFocused = false) =>
   $.ui.mount({ plugin: 'victrix', surface: 'terminal', component: 'Pane', requestId: 'victrix', props: paneProps(columns, rows, isFocused) })

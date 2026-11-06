@@ -1,5 +1,5 @@
 // The pane as rows of painted spans: the board (owner's drawings, 2026-11-05). Pure, no `$`: the lens paints the spans,
-// the kit measures every rung. One snake: born at the right edge of the face row, it wraps the face in its box, comes
+// the kit measures every rung. One snake: born at the right edge of the top row, it boxes the plan's name, comes
 // down column 3 through the done steps, and ends as the current step's bar, whose head `▶` is Claude. Under it
 // `proof` (the maths, each unit an English line then its notation) and `process` (what Claude just did) sit inside the
 // hairpin, each fact, check and action a smaller food on its right edge (`◦` hollow while assumed or pending, `●`
@@ -374,15 +374,18 @@ const footerRows = (count: number, input: LayoutInput, columns: number, live: Pl
   const meet = landed ? footerMeet(steps.map(item => stepStatus(factsOf(item, input.claims))), 'plan') : footerMeet(liveStatuses)
   const parts: Span[][] = [sigma, ...(clock ? [[span('t ', 'dim'), span(clock, 'dim')]] : []), meet]
   const joined = (take: number): Span[] => parts.slice(0, take).flatMap((part, index) => (index > 0 ? [span(' · ', 'dim'), ...part] : part))
-  const fitting = [3, 2, 1, 0].find(take => width(joined(take)) <= columns - 2) ?? 0
+  // The one key every size shows, drawn the way the engine draws a plain button: `h: ? keys` (the `?` itself cannot
+  // be a hotkey). Under 30 columns it shortens to `h: ?`, never wraps.
+  const keysHint: Span[] = columns >= 30 ? [span('h', 'math'), span(': ? keys', 'dim')] : [span('h', 'math'), span(': ?', 'dim')]
+  const fitting = [3, 2, 1, 0].find(take => width(joined(take)) <= columns - 1 - width(keysHint)) ?? 0
   const body = joined(fitting)
-  const math = row('footer:math', [...body, gapSpan(columns - width(body) - 1), span('?', 'dim')], columns, { kind: 'help' })
+  const math = row('footer:math', [...body, gapSpan(columns - width(body) - width(keysHint)), ...keysHint], columns, { kind: 'help' })
   const en = row('footer:en', [span(needsText(input, live, facts), 'text')], columns)
   const rule = row('footer:rule', [span('─'.repeat(columns), 'dim')], columns)
   return count >= 3 ? [rule, en, math] : count === 2 ? [en, math] : count === 1 ? [math] : []
 }
 
-/** The box rows once a plan exists: `┏━━━━━┓  plan · title`, the face and the tail to the right edge, `┗━━┓   3/10 steps`. */
+/** The box rows once a plan exists: `┏━━━━━┓  plan · title`, the tail to the right edge, `┗━━┓   3/10 steps`. */
 const boxRows = (input: LayoutInput, columns: number, done: number, counted: number): LayoutRow[] => {
   // No face (owner, 2026-11-05: "it's only snake now"): the snake is born at the right edge of the top row, runs
   // left, and turns down at the spine's column into the list; the plan's name and count sit beside the spine.

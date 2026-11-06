@@ -188,15 +188,6 @@ export const MARK = {
 /** One spinner frame per tick, round and round. */
 export const spinner = (tick: number): string => SPINNER[((Math.floor(tick) % SPINNER.length) + SPINNER.length) % SPINNER.length] ?? SPINNER[0]
 
-export type FaceState = 'idle' | 'working' | 'worried'
-
-const FACES: Readonly<Record<FaceState, string>> = { idle: '[-_-]', working: '[o_o]', worried: '[o_O]' }
-
-/** The face: `[-_-]` by default, `[o_o]` only while a call runs, `[o_O]` only when something needs you or broke. */
-export const face = (state: FaceState): string => FACES[state]
-
-/** Cells the face takes, so rows can line up under its bracket. */
-export const FACE_CELLS = cells(FACES.idle)
 
 export type FlowCall = { readonly text: string; readonly isOk: boolean; readonly isRunning?: boolean }
 

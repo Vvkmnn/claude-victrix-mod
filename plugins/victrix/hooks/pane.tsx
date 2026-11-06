@@ -11,10 +11,12 @@ import { factsOf } from './fit'
 import { GLYPH, MEANING, label as claimLabel, stepStatus, weakest } from './lattice'
 import { LIVE_COLOUR, layout, meetLine, shortClock, statusWord } from './layout'
 import type { LayoutRow, Paint, Press } from './layout'
-import { PANE, acceptEnglish, hiddenKey, loadPlan, pressVerb, verifyStep } from './lens'
+import { PANE, acceptEnglish, cycleSize, hiddenKey, loadPlan, pressVerb, verifyStep } from './lens'
 import { VERBS } from './notes'
 import { itemNamed, nowItem } from './plan'
 import { drawTape } from './tape'
+import { HEAD, keysOn } from './ui'
+import type { KeyAction } from './ui'
 
 type On = Parameters<Register>[0]
 type Dollar = Pick<CoreEngineInterface, 'state' | 'store' | 'ui' | 'fs' | 'process' | 'model' | 'clock'>
@@ -35,7 +37,7 @@ const isPlanMode = atom({ plugin: 'victrix', key: 'isPlanMode' } as const, false
 const signals = atom({ plugin: 'victrix', key: 'signals' } as const, [] as readonly Signal[])
 
 /**
- * The theme-key or colour each paint resolves to; `text` is the theme's own foreground. The maths and the face share
+ * The theme-key or colour each paint resolves to; `text` is the theme's own foreground. The maths share
  * `permission`, the calm accent every theme defines for the engine's own asks (teal in Kanagawa, lavender in the dark
  * preset): one voice for the notation, never the orange of the live step.
  */
@@ -91,6 +93,18 @@ export const registerPane = (on: On) => {
       await pressVerb($, kind, live.name)
     }
 
+    // The one key table's actions, for the `?` card's buttons (the same keys as the hidden ones below).
+    const keyHandlers: Readonly<Record<KeyAction, () => unknown>> = {
+      size: () => cycleSize($),
+      explain: () => (live ? toggleCard(`step:${live.name}`) : toggleCard('help')),
+      check: live?.judge ? press({ kind: 'check', step: live.name }) : () => $.ui.toast('this step has no check to run'),
+      doubt: verbOn('doubt'),
+      add: verbOn('add'),
+      wrong: verbOn('wrong'),
+      hide,
+      keys: () => toggleCard('help'),
+    }
+
     // The keys live behind `?`: while the pane is held they still work, as letters, without labels on screen. Over a
     // card the visible `close` button owns `e`, so the hidden one is left out there (two on one hotkey: the later wins).
     const hiddenKeys = (withExplain: boolean) =>
@@ -100,6 +114,7 @@ export const registerPane = (on: On) => {
           {withExplain ? <Button key="k:e" plain hotkey="e" label="" onPress={() => (live ? toggleCard(`step:${live.name}`) : toggleCard('help'))} /> : null}
           <Button key="k:h" plain hotkey="h" label="" onPress={() => toggleCard('help')} />
           <Button key="k:q" plain hotkey="q" label="" onPress={hide} />
+          <Button key="k:s" plain hotkey="s" label="" onPress={() => cycleSize($)} />
           {live?.judge ? <Button key="k:c" plain hotkey="c" label="" onPress={press({ kind: 'check', step: live.name })} /> : null}
         </Box>
       ) : null
@@ -113,6 +128,13 @@ export const registerPane = (on: On) => {
             {body.map((line, index) => (
               <Text key={`card:${index}`} color={colourOf(line.paint)} dimColor={line.paint === 'dim'} bold={line.bold === true}>{draw.fit(line.text, columns)}</Text>
             ))}
+            {opened === 'help' ? (
+              <Box flexDirection="column">
+                {keysOn('pane').filter(entry => entry.action !== 'keys').map(entry => (
+                  <Button key={`help:${entry.hotkey}`} plain {...key(entry.hotkey)} label={entry.label} onPress={keyHandlers[entry.action]} />
+                ))}
+              </Box>
+            ) : null}
             <Box flexGrow={1} />
             <Box flexDirection="row" gap={2}>
               <Text dimColor>{'    '}</Text>
@@ -179,8 +201,8 @@ const helpRows = (columns: number): CardLine[] => {
   const line = (text: string, paint: Paint = 'text', bold = false): CardLine => ({ text, paint, bold })
   const wrap = (text: string, paint: Paint = 'dim') => draw.wrap(text, Math.max(10, columns - 4)).map(part => line(`    ${part}`, paint))
   return [
-    line('    -_-  Victrix', 'math', true),
-    ...wrap('The plan beside the chat, drawn as one line: the snake is born at the right, wraps the face, and comes down the steps eating them; the orange head is Claude on the current task; proof is the maths under it; process is what Claude just did.'),
+    line(`    ━━${HEAD}`, 'math', true),
+    ...wrap('Victrix: the plan beside the chat, drawn as one line. The snake is born at the right and comes down the steps eating them; its head is Claude on the current task; proof is the maths under it; process is what Claude just did.'),
     line(''),
     line('    ✗ ≤ ○ ≤ ■ ≤ ●', 'math', true),
     ...wrap('broken, assumed, checked by you, checked by a tool, proved in the model. A claim climbs only on evidence.'),
@@ -188,9 +210,7 @@ const helpRows = (columns: number): CardLine[] => {
     line(''),
     ...wrap('Three stages of rigour (Tao): hand-waving, rigorous, post-rigorous. This pane serves the second: it asks for the proof of the obvious.'),
     line(''),
-    ...wrap('keys  d doubt a line   a add a fact   w wrong path   e explain   c run the check   q hide   h this', 'text'),
-    line(''),
-    ...wrap('The ribbon above the prompt is the same instrument when no pane fits.'),
+    ...wrap('The row above the prompt is the same snake when no pane fits; s moves between pane, row and hidden. Every key, by letter or by click:'),
     line(''),
     // The end note, haiku-light: the maker, the muses, and (later) where to find it.
     line('    by V · inspired by Terence & Boris · github.com/Vvkmnn/claude-victrix-mod', 'faint'),

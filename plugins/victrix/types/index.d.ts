@@ -164,8 +164,8 @@ declare module 'claude-code' {
       showWhy: boolean
       /** Every claim under every step, keyed by step and words; checks and answers replace in place. */
       claims: readonly Claim[]
-      /** The person's standing choice of form: tape, third, strip, or auto. */
-      formChoice: 'tape' | 'third' | 'auto'
+      /** The person's standing choice of size: pane, row, hidden, or auto (the pane where it seats, else the row). */
+      sizeChoice: 'pane' | 'row' | 'hidden' | 'auto'
       /** Counts up while a call runs on the terminal: spinner frame and pulse position. */
       tick: number
       /** The questions an AskUserQuestion in flight asks, until it returns. */

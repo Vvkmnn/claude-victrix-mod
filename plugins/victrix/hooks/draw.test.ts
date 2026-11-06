@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { FACE_CELLS, SEP, cells, chips, face, fit, flow, ink, line, pad, pulse, spark, spinner, litIndex, tally, toAscii, trunk, twoEnded, wrap } from './draw'
+import { SEP, cells, chips, fit, flow, ink, line, pad, pulse, spark, spinner, litIndex, tally, toAscii, trunk, twoEnded, wrap } from './draw'
 
 const WIDTHS = [0, 1, 5, 26, 66] as const
 
@@ -69,12 +69,6 @@ test('spinner breathes through its four dot frames in both directions of tick', 
   expect(spinner(-1)).toBe('•')
 })
 
-test('the face has three states and a fixed width', () => {
-  expect(face('idle')).toBe('[-_-]')
-  expect(face('working')).toBe('[o_o]')
-  expect(face('worried')).toBe('[o_O]')
-  expect(FACE_CELLS).toBe(5)
-})
 
 test('flow reads oldest first, marks failures, spins the running call, and drops the oldest to fit', () => {
   const calls = [
